@@ -1,0 +1,89 @@
+{
+  "playbooks": [
+    {
+      "id": "central_de_software",
+      "palavras_chave": [
+        "central de software",
+        "central software",
+        "abrir central",
+        "central nao abre",
+        "central não abre",
+        "problema na central"
+      ],
+      "titulo": "Central de Software — Falha ao Abrir / Erro",
+      "passos": [
+        "Verificar se o usuário consegue abrir outros sistemas normalmente (ex: navegador, Word).",
+        "Solicitar ao usuário que abra o Gerenciador de Tarefas (Ctrl+Shift+Esc) e verifique se há processo 'CentralSvc' ou 'Central.exe' travado — se sim, finalizar e tentar abrir novamente.",
+        "Checar se há atualização pendente da Central: abrir o ícone da bandeja do sistema e clicar em 'Verificar Atualizações'.",
+        "Tentar abrir a Central com permissão de Administrador (botão direito → Executar como administrador) e verificar se aparece mensagem de erro.",
+        "Caso apareça erro, copiar a mensagem exata ou tirar print e enviar no chamado.",
+        "Se o problema persistir, solicitar ao usuário que acesse: Menu Iniciar → Painel de Controle → Programas → Desinstalar a Central → Reinstalar pelo link interno da agência.",
+        "Escalar para equipe N2 com os logs coletados caso nenhuma das etapas anteriores resolva."
+      ]
+    },
+    {
+      "id": "acesso_cameras",
+      "palavras_chave": [
+        "câmera",
+        "camera",
+        "cctv",
+        "monitoramento",
+        "gravação",
+        "acesso câmera",
+        "acesso camera"
+      ],
+      "titulo": "Acesso às Câmeras de Monitoramento",
+      "passos": [
+        "Verificar se o usuário possui perfil de acesso ao sistema de monitoramento (solicitar ao TI da agência).",
+        "Confirmar o IP e porta do servidor de câmeras da agência com o responsável local.",
+        "Testar acesso via VPN ativa — sem VPN o sistema de câmeras não é acessível remotamente.",
+        "Orientar o usuário a abrir o software de monitoramento (ex: Intelbras ISS, Hikvision iVMS) e inserir as credenciais fornecidas pelo TI.",
+        "Se o acesso for negado, abrir solicitação formal de permissão junto ao gestor da agência.",
+        "Escalar para N2 se houver problema de conectividade no servidor de câmeras."
+      ]
+    },
+    {
+      "id": "sem_acesso_pasta",
+      "palavras_chave": [
+        "pasta pública",
+        "pasta publica",
+        "sem acesso pasta",
+        "acesso à pasta",
+        "pasta da agência",
+        "pasta compartilhada",
+        "acesso pasta"
+      ],
+      "titulo": "Sem Acesso à Pasta Pública / Compartilhada",
+      "passos": [
+        "Confirmar o caminho completo da pasta (ex: \\\\servidor\\agencia\\publica) com o usuário.",
+        "Verificar se o usuário está conectado à rede da agência ou via VPN.",
+        "Solicitar ao usuário que tente acessar via \\\\[IP do servidor] diretamente para isolar problema de DNS.",
+        "Verificar no Active Directory (AD) se o usuário pertence ao grupo de segurança que tem permissão na pasta.",
+        "Adicionar o usuário ao grupo correto ou solicitar aprovação do gestor para o acesso.",
+        "Orientar o usuário a mapear a pasta como unidade de rede se o acesso direto funcionar."
+      ]
+    },
+    {
+      "id": "impressora",
+      "palavras_chave": [
+        "impressora",
+        "imprimir",
+        "impressão",
+        "toner",
+        "cartucho",
+        "papel preso",
+        "impressora nao imprime",
+        "impressora não imprime"
+      ],
+      "titulo": "Problema com Impressora",
+      "passos": [
+        "Verificar se a impressora está ligada, online e com papel.",
+        "Checar nível de toner/cartucho no painel da impressora ou via software de gerenciamento.",
+        "Acessar 'Dispositivos e Impressoras' no Windows e verificar se há fila de impressão travada — cancelar todos os trabalhos pendentes.",
+        "Reiniciar o serviço de spooler: Win+R → services.msc → 'Spooler de Impressão' → Reiniciar.",
+        "Se for impressora de rede, verificar IP da impressora e reconfigurar a porta TCP/IP se necessário.",
+        "Para solicitação de toner/cartucho: abrir chamado de compra com número de série e modelo da impressora."
+      ]
+    }
+  ]
+}

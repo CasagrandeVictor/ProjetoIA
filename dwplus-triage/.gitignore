@@ -1,0 +1,29 @@
+# ── Credenciais e segredos ────────────────────────────────────────────────────
+.env
+*.env
+*.token
+
+# ── Dados de runtime (não commitar dados reais do Jira) ──────────────────────
+backend/training_data.json
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ── Arquivos gerados ──────────────────────────────────────────────────────────
+*.csv
+*.log
+
+# ── Sistema ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
