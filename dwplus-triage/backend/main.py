@@ -23,9 +23,24 @@ from typing import Optional, List
 from jira import JIRA
 
 # Credenciais — lidas exclusivamente de variáveis de ambiente / arquivo .env
-JIRA_EMAIL = os.environ["JIRA_EMAIL"]
-JIRA_TOKEN = os.environ["JIRA_TOKEN"]
+# NUNCA insira tokens ou senhas diretamente no código-fonte
+
+
+def _exigir_env(nome: str) -> str:
+    """Lê variável obrigatória e lança erro amigável se ausente."""
+    valor = os.getenv(nome)
+    if not valor:
+        raise RuntimeError(
+            f"Variável de ambiente obrigatória '{nome}' não encontrada. "
+            f"Copie .env.example para .env e preencha os valores reais."
+        )
+    return valor
+
+
+JIRA_EMAIL = _exigir_env("JIRA_EMAIL")
+JIRA_TOKEN = _exigir_env("JIRA_TOKEN")
 JIRA_URL   = os.getenv("JIRA_URL", "https://dwplus.atlassian.net")
+# GEMINI_API_KEY é opcional — se ausente o sistema usa IA de regras como fallback
 
 TRAINING_DATA_PATH = Path(__file__).parent / "training_data.json"
 PLAYBOOKS_PATH     = Path(__file__).parent / "playbooks.json"
@@ -63,9 +78,13 @@ class SugestaoIA(BaseModel):
     organizacao_sugerida: str
     confianca: float
     orientacoes: str
-    fonte: str  # "treinamento_email" | "treinamento_dominio" | "dominio" | "desconhecido"
+    fonte: str  # "gemini" | "treinamento_email" | "treinamento_dominio" | "dominio" | "desconhecido"
     playbook_titulo: Optional[str] = None
     playbook_passos: Optional[List[str]] = None
+    # Campos adicionados pelo Gemini (None quando usa IA de regras)
+    categoria: Optional[str] = None
+    prioridade: Optional[str] = None
+    justificativa: Optional[str] = None
 
 
 class AtualizacaoChamado(BaseModel):
@@ -112,6 +131,29 @@ def detectar_campo_organizacao(jira: JIRA) -> str:
     _campo_organizacao = "customfield_10002"
     print(f"⚠️  Campo organização não detectado, usando fallback: {_campo_organizacao}")
     return _campo_organizacao
+
+
+def _extrair_chamado_raw_metricas(issue, campo_org: str) -> dict:
+    """
+    Extração leve para métricas: preserva o timestamp COMPLETO (não trunca em [:10])
+    para permitir cálculos por hora do dia. Retorna dict simples (sem Pydantic).
+    """
+    email = getattr(issue.fields.reporter, "emailAddress", "desconhecido@dwplus.com.br")
+    org_bruta = getattr(issue.fields, campo_org, None)
+    nome_org = "Não preenchido"
+    if org_bruta:
+        if isinstance(org_bruta, list) and org_bruta:
+            nome_org = getattr(org_bruta[0], "name", str(org_bruta[0]))
+        else:
+            nome_org = str(org_bruta)
+    return {
+        "chave": issue.key,
+        "email": email,
+        # Timestamp completo: "2024-03-15T14:32:00.000+0000"
+        "criado_em": str(issue.fields.created) if issue.fields.created else "",
+        "organizacao_atual": nome_org,
+        "status": getattr(issue.fields.status, "name", "Desconhecido") if issue.fields.status else "Desconhecido",
+    }
 
 
 def _extrair_chamado(issue, campo_org: str) -> ChamadoJira:
@@ -349,6 +391,43 @@ def gerar_sugestao_ia(chamado: ChamadoJira) -> SugestaoIA:
     )
 
 
+def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
+    """
+    Dispatches para Gemini quando GEMINI_API_KEY estiver configurada;
+    caso contrário usa a lógica de regras (gerar_sugestao_ia).
+    """
+    if not os.getenv("GEMINI_API_KEY"):
+        return gerar_sugestao_ia(chamado)
+
+    from llm_gemini import analisar_chamado
+
+    # Tenta carregar organizações válidas para guiar o Gemini (não bloqueante)
+    orgs_validas: list = []
+    try:
+        jira = get_jira_client()
+        orgs_validas = list(_obter_orgs_jira(jira).keys())
+    except Exception as e:
+        print(f"⚠️  Não foi possível carregar organizações para o Gemini: {e}")
+
+    resultado = analisar_chamado(chamado.model_dump(), orgs_validas)
+
+    # Busca playbook por palavras-chave para enriquecer a sugestão do Gemini
+    texto = (chamado.titulo + " " + chamado.descricao).lower()
+    playbook = _buscar_playbook(texto)
+
+    return SugestaoIA(
+        organizacao_sugerida=resultado["organizacao_sugerida"],
+        confianca=resultado["confianca"],
+        orientacoes=resultado["orientacoes"],
+        fonte="gemini",
+        categoria=resultado.get("categoria"),
+        prioridade=resultado.get("prioridade"),
+        justificativa=resultado.get("justificativa"),
+        playbook_titulo=playbook["titulo"] if playbook else None,
+        playbook_passos=playbook["passos"] if playbook else None,
+    )
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/chamados", response_model=List[ChamadoJira], summary="Lista chamados do Jira")
@@ -378,9 +457,10 @@ def buscar_chamado(chave: str):
 
 @app.post("/chamados/{chave}/sugestao", response_model=SugestaoIA, summary="Gera sugestão de IA")
 def gerar_sugestao(chave: str):
+    """Usa Gemini Flash quando GEMINI_API_KEY estiver configurada; fallback para regras."""
     chamado = buscar_chamado(chave)
     try:
-        return gerar_sugestao_ia(chamado)
+        return _gerar_sugestao_unificada(chamado)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar sugestão: {exc}")
 
@@ -427,7 +507,7 @@ def atualizar_chamado(chave: str, atualizacao: AtualizacaoChamado):
 
         # ── 3. Registra feedback na base de treinamento ───────────────────────
         chamado_atual = _extrair_chamado(issue, campo_org)
-        sugestao_atual = gerar_sugestao_ia(chamado_atual)
+        sugestao_atual = _gerar_sugestao_unificada(chamado_atual)
         _registrar_feedback(
             chamado=chamado_atual,
             org_sugerida=sugestao_atual.organizacao_sugerida,
@@ -462,6 +542,30 @@ def estatisticas(dias: int = 90, limite: int = 100):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {exc}")
+
+
+@app.get("/metricas", summary="Métricas de volume de chamados (por hora, dia da semana, mês)")
+def metricas_chamados(dias: int = 90, limite: int = 500):
+    """
+    Busca chamados com timestamp COMPLETO (não truncado) para calcular
+    distribuição por hora do dia, dia da semana e mês.
+    """
+    try:
+        from metricas_chamados import calcular_metricas
+
+        jira = get_jira_client()
+        campo_org = detectar_campo_organizacao(jira)
+        issues = jira.search_issues(
+            f"created >= -{dias}d ORDER BY created DESC",
+            maxResults=limite,
+        )
+        chamados_raw = [_extrair_chamado_raw_metricas(i, campo_org) for i in issues]
+        metricas = calcular_metricas(chamados_raw)
+        metricas["periodo_dias"] = dias
+        metricas["total_analisado"] = len(chamados_raw)
+        return metricas
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular métricas: {exc}")
 
 
 @app.get("/organizacoes", summary="Lista organizações disponíveis no Jira")

@@ -1,162 +1,100 @@
 # DWPLUS Triage — Sistema Inteligente de Chamados Jira
 
-Sistema web profissional para triagem automatizada de chamados do Jira, com análise de IA integrada para sugestão de organização e orientações técnicas.
+Sistema web de triagem automatizada de chamados do Jira com análise por IA (Gemini Flash), métricas de volume e interface Vue 3 moderna.
 
 ---
 
 ## Funcionalidades
 
-- ✅ Listagem de chamados do Jira em tempo real (últimos 90 dias)
-- ✅ Auto-detecção do campo "Organização" via API do Jira
-- ✅ Análise inteligente (mock IA) com sugestão de organização por domínio de e-mail
-- ✅ Orientações contextuais automáticas baseadas no conteúdo do chamado
-- ✅ Aplicação de sugestões com comentário no chamado via API
-- ✅ Exportação de dados para CSV com BOM UTF-8
-- ✅ Estatísticas em tempo real (total, sem organização, percentual pendente)
-- ✅ Interface dark mode responsiva e moderna
-- ✅ Animações CSS nativas sem dependências externas
+- Listagem de chamados do Jira em tempo real (últimos 90 dias)
+- Análise inteligente via **Gemini Flash** — sugestão de organização, categoria, prioridade e orientações técnicas detalhadas
+- Fallback automático para triagem por regras quando `GEMINI_API_KEY` não estiver configurada
+- Aplicação da sugestão com comentário automático no chamado via API
+- Base de playbooks: orientações passo a passo por tipo de problema (CRUD completo)
+- Feedback loop: cada triagem confirmada é registrada para melhoria contínua
+- Métricas de volume: média por dia/semana/mês, pico por hora e por dia da semana
+- Interface Vue 3 dark mode com gráficos interativos (Chart.js)
+- Privacidade: apenas o domínio do e-mail é enviado ao LLM (nunca e-mail completo ou token)
 
 ---
 
 ## Pré-requisitos
 
-- Python 3.9+
-- Acesso ao Jira Cloud (token de API)
-- Navegador moderno (Chrome, Firefox, Edge, Safari)
+- **Python 3.9+**
+- **Node.js 18+** (para o frontend Vue)
+- Acesso ao Jira Cloud com token de API
+- Chave da API Gemini (opcional — obtida em [aistudio.google.com](https://aistudio.google.com/app/apikey))
 
 ---
 
 ## Instalação
 
-### 1. Clone o projeto
+### 1. Configure as credenciais
 
 ```bash
-git clone https://github.com/dwplus/triage.git
-cd dwplus-triage
+# Na raiz do projeto
+cp .env.example backend/.env
+
+# Edite backend/.env com suas credenciais:
+# JIRA_EMAIL, JIRA_TOKEN, JIRA_URL, GEMINI_API_KEY (opcional)
 ```
 
-### 2. Configure as variáveis de ambiente
-
-```bash
-cp .env.example .env
-# Edite o .env com suas credenciais reais
-```
-
-### 3. Instale as dependências do backend
+### 2. Instale as dependências do backend
 
 ```bash
 cd backend
+
+# Crie e ative o virtualenv
 python -m venv venv
 
 # Windows
 venv\Scripts\activate
 
-# Linux/macOS
+# Linux / macOS
 source venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
+### 3. Instale as dependências do frontend Vue
+
+```bash
+cd frontend-vue
+npm install
+```
+
 ---
 
-## Como Usar
+## Como Rodar
 
-### Iniciar o Backend (FastAPI)
+### Backend (FastAPI)
 
 ```bash
 cd backend
-# Com venv ativado:
-python main.py
-# Ou via uvicorn diretamente:
+
+# Windows (venv ativado)
+venv\Scripts\python main.py
+
+# Linux / macOS
+venv/bin/python main.py
+
+# Ou via uvicorn com reload automático
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-O backend estará disponível em: `http://localhost:8000`  
-Documentação interativa: `http://localhost:8000/docs`
+API disponível em: `http://localhost:8000`  
+Documentação Swagger: `http://localhost:8000/docs`
 
-### Iniciar o Frontend
-
-```bash
-cd frontend
-
-# Python (recomendado)
-python -m http.server 8080
-
-# Node.js (alternativa)
-npx serve -p 8080 .
-```
-
-Acesse no navegador: `http://localhost:8080`
-
-### Iniciar tudo de uma vez (Linux/macOS)
+### Frontend Vue 3
 
 ```bash
-chmod +x start.sh
-./start.sh
+cd frontend-vue
+npm run dev
 ```
 
----
+Interface disponível em: `http://localhost:5173`
 
-## Estrutura dos Dados
-
-### Chamado (`ChamadoJira`)
-
-```json
-{
-  "chave": "DWP-1234",
-  "usuario_id": "joao.silva",
-  "email": "joao.silva@sicredi.com.br",
-  "titulo": "Erro ao acessar o módulo financeiro",
-  "descricao": "Ao tentar acessar o módulo...",
-  "organizacao_atual": "Não preenchido",
-  "criado_em": "2024-01-15",
-  "status": "Em andamento",
-  "prioridade": "Alta"
-}
-```
-
-### Sugestão de IA (`SugestaoIA`)
-
-```json
-{
-  "organizacao_sugerida": "Sicredi",
-  "confianca": 0.85,
-  "orientacoes": "Verificar credenciais do usuário 'joao.silva' na organização Sicredi..."
-}
-```
-
-### Atualização de Chamado (`AtualizacaoChamado`)
-
-```json
-{
-  "chave": "DWP-1234",
-  "organizacao": "Sicredi",
-  "comentario": "[DWPLUS Triage IA] Organização sugerida: Sicredi\n\nOrientações: ..."
-}
-```
-
-### Estatísticas (`GET /stats`)
-
-```json
-{
-  "total": 48,
-  "sem_organizacao": 12,
-  "percentual_pendente": 25.0
-}
-```
-
----
-
-## API Endpoints
-
-| Método | Endpoint                        | Descrição                         |
-|--------|---------------------------------|-----------------------------------|
-| GET    | `/chamados`                     | Lista chamados (params: dias, limite) |
-| GET    | `/chamados/{chave}`             | Busca chamado específico por chave |
-| POST   | `/chamados/{chave}/sugestao`    | Gera sugestão de IA para o chamado |
-| PUT    | `/chamados/{chave}`             | Atualiza chamado e adiciona comentário |
-| GET    | `/stats`                        | Retorna estatísticas gerais       |
-| GET    | `/docs`                         | Documentação interativa (Swagger) |
+> O frontend legado (`frontend/index.html`) continua funcional. Sirva com `python -m http.server 8080` dentro da pasta `frontend/`.
 
 ---
 
@@ -165,56 +103,123 @@ chmod +x start.sh
 ```
 dwplus-triage/
 ├── backend/
-│   ├── main.py              # API FastAPI completa
-│   └── requirements.txt     # Dependências Python
+│   ├── main.py                # API FastAPI — todos os endpoints
+│   ├── llm_gemini.py          # Integração Gemini Flash (google-genai SDK)
+│   ├── metricas_chamados.py   # Cálculo de métricas de volume + exportação CSV/PNG
+│   ├── playbooks.json         # Base de conhecimento (palavras-chave + passos)
+│   ├── requirements.txt       # Dependências Python
+│   └── venv/                  # Virtualenv (não commitado)
+├── frontend-vue/              # Interface Vue 3 + Vite
+│   ├── src/
+│   │   ├── services/api.js    # Chamadas à API centralizadas (axios)
+│   │   └── components/
+│   │       ├── AppHeader.vue      # Navegação por abas
+│   │       ├── Dashboard.vue      # Cards de estatísticas
+│   │       ├── ChamadosList.vue   # Tabela de chamados
+│   │       ├── ChamadoModal.vue   # Detalhe + análise IA + aplicar organização
+│   │       ├── MetricasChart.vue  # Gráficos por hora / dia / mês
+│   │       └── PlaybooksPanel.vue # CRUD de playbooks
+│   └── .env.example
 ├── frontend/
-│   └── index.html           # Aplicação SPA (HTML + CSS + JS)
-├── README.md
-├── start.sh                 # Script de inicialização
-├── .env.example             # Exemplo de variáveis de ambiente
-└── .gitignore
+│   └── index.html             # Frontend legado (mantido como referência)
+├── .env.example               # Modelo de variáveis de ambiente
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## Segurança
+## Variáveis de Ambiente
 
-**Nunca commite o arquivo `.env` com credenciais reais.**
+Copie `.env.example` para `backend/.env` e preencha:
 
-Configure as credenciais via variáveis de ambiente:
+| Variável         | Obrigatória | Descrição                                         |
+|------------------|-------------|---------------------------------------------------|
+| `JIRA_EMAIL`     | Sim         | E-mail da conta Jira                              |
+| `JIRA_TOKEN`     | Sim         | Token de API do Jira (gerado em id.atlassian.net) |
+| `JIRA_URL`       | Não         | URL do Jira (padrão: `https://dwplus.atlassian.net`) |
+| `GEMINI_API_KEY` | Não         | Chave Gemini — sem ela usa triagem por regras     |
+| `API_HOST`       | Não         | Host da API (padrão: `0.0.0.0`)                   |
+| `API_PORT`       | Não         | Porta da API (padrão: `8000`)                     |
 
-```bash
-export JIRA_EMAIL="seu_email@empresa.com"
-export JIRA_TOKEN="seu_token_jira"
-export JIRA_URL="https://suaempresa.atlassian.net"
+Para o frontend Vue, crie `frontend-vue/.env`:
+
+| Variável       | Padrão                  | Descrição               |
+|----------------|-------------------------|-------------------------|
+| `VITE_API_URL` | `http://localhost:8000` | URL base do backend     |
+
+---
+
+## API — Endpoints
+
+| Método | Endpoint                     | Descrição                                         |
+|--------|------------------------------|---------------------------------------------------|
+| GET    | `/chamados`                  | Lista chamados (params: `dias`, `limite`)         |
+| GET    | `/chamados/{chave}`          | Busca chamado por chave                           |
+| POST   | `/chamados/{chave}/sugestao` | Gera análise de IA (Gemini ou regras)             |
+| PUT    | `/chamados/{chave}`          | Atualiza organização + registra feedback          |
+| GET    | `/stats`                     | Estatísticas gerais (total, sem org, % pendente)  |
+| GET    | `/metricas`                  | Métricas de volume por hora, dia da semana e mês  |
+| GET    | `/organizacoes`              | Lista organizações do Jira Service Management     |
+| GET    | `/playbooks`                 | Lista playbooks cadastrados                       |
+| POST   | `/playbooks`                 | Cria novo playbook                                |
+| DELETE | `/playbooks/{id}`            | Remove playbook                                   |
+| GET    | `/training-data`             | Exporta base de feedback de treinamento           |
+| GET    | `/docs`                      | Documentação interativa (Swagger UI)              |
+
+---
+
+## Modelos de Dados
+
+### Sugestão de IA (`SugestaoIA`)
+
+```json
+{
+  "organizacao_sugerida": "Sicredi",
+  "confianca": 0.91,
+  "orientacoes": "Verificar credenciais do usuário na organização Sicredi...",
+  "fonte": "gemini",
+  "categoria": "Acesso/Autenticação",
+  "prioridade": "Alta",
+  "justificativa": "Domínio sicredi.com.br e descrição indicam problema de login",
+  "playbook_titulo": null,
+  "playbook_passos": null
+}
 ```
 
-O backend usa `os.getenv()` com fallback para valores hardcoded (apenas para desenvolvimento).  
-Em produção, remova os valores hardcoded e use exclusivamente variáveis de ambiente ou um vault de secrets.
+### Métricas (`GET /metricas`)
+
+```json
+{
+  "resumo": { "total": 120, "media_por_dia": 1.33, "media_por_semana": 9.23, "media_por_mes": 40.0 },
+  "por_hora": { "0": 2, "8": 18, "9": 22, "10": 19, "..." : "..." },
+  "por_dia_semana": { "Segunda": 28, "Terça": 31, "..." : "..." },
+  "por_mes": { "2024-11": 38, "2024-12": 42, "2025-01": 40 },
+  "hora_pico": 9,
+  "dia_semana_pico": "Terça"
+}
+```
 
 ---
 
 ## Troubleshooting
 
-| Problema | Causa Provável | Solução |
+| Problema | Causa provável | Solução |
 |---|---|---|
-| `Connection refused` no frontend | Backend não iniciado | Verifique se `python main.py` está rodando |
-| `401 Unauthorized` | Token Jira inválido ou expirado | Gere um novo token em `id.atlassian.com` |
-| `404 Not Found` em chamado | Chave inválida ou sem acesso | Verifique permissões no projeto Jira |
-| Campo organização não detectado | Nome de campo customizado | Verifique o ID correto em `Configurações > Campos` no Jira |
-| CORS Error | Frontend em porta diferente | O backend já aceita `allow_origins=["*"]` |
+| `RuntimeError: Variável 'JIRA_EMAIL' não encontrada` | `.env` não criado ou vazio | Copie `.env.example` → `backend/.env` e preencha |
+| `401 Unauthorized` | Token Jira inválido ou expirado | Gere novo token em `id.atlassian.net` → Segurança → Tokens de API |
+| `404 Not Found` em chamado | Chave inválida ou sem permissão | Verifique permissões do usuário no projeto Jira |
+| Gemini retorna fallback | `GEMINI_API_KEY` inválida ou cota esgotada | Verifique a chave em `aistudio.google.com` |
+| CORS Error no frontend | Backend não iniciado | Confirme que `python main.py` está rodando na porta 8000 |
+| Gráfico PNG não gerado | `matplotlib` não instalado | `pip install matplotlib` no venv |
 
 ---
 
-## Próximos Passos
+## Segurança
 
-- [ ] Implementar modelo de ML real (scikit-learn ou HuggingFace) para classificação
-- [ ] Integração com LLM + RAG (Retrieval-Augmented Generation) para orientações precisas
-- [ ] Banco de dados PostgreSQL para histórico de triagens e feedback loop
-- [ ] Autenticação JWT para múltiplos usuários
-- [ ] Dashboard com gráficos históricos (Chart.js)
-- [ ] Webhook Jira para triagem automática em tempo real
-- [ ] Integração com Slack/Teams para notificações
+- Credenciais lidas **exclusivamente** de variáveis de ambiente — nunca hardcoded.
+- O arquivo `backend/.env` está no `.gitignore` e **nunca deve ser commitado**.
+- O LLM recebe apenas: domínio do e-mail, título e descrição do chamado. E-mail completo e tokens ficam no servidor.
 
 ---
 
