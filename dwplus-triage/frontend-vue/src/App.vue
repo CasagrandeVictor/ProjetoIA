@@ -12,15 +12,29 @@
       />
     </section>
 
-    <!-- Tab: Chamados -->
+    <!-- Tab: Chamados em aberto -->
     <section v-if="abaAtiva === 'chamados'">
       <ChamadosList
+        titulo="Em Aberto"
         :chamados="chamados"
         :loading="carregandoChamados"
         :dias="diasFiltro"
         :limite="limiteFiltro"
         @selecionar="abrirModal"
         @reload="carregarChamados"
+      />
+    </section>
+
+    <!-- Tab: Chamados concluídos -->
+    <section v-if="abaAtiva === 'concluidos'">
+      <ChamadosList
+        titulo="Concluídos"
+        :chamados="chamadosConcluidos"
+        :loading="carregandoChamadosConcluidos"
+        :dias="diasFiltro"
+        :limite="limiteFiltro"
+        @selecionar="abrirModal"
+        @reload="carregarChamadosConcluidos"
       />
     </section>
 
@@ -67,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { api } from './services/api.js'
 import AppHeader from './components/AppHeader.vue'
 import Dashboard from './components/Dashboard.vue'
@@ -89,6 +103,10 @@ const chamados = ref([])
 const carregandoChamados = ref(false)
 const diasFiltro = ref(90)
 const limiteFiltro = ref(50)
+
+// ── Estado: Chamados concluídos ───────────────────────────────────────────────
+const chamadosConcluidos = ref([])
+const carregandoChamadosConcluidos = ref(false)
 
 // ── Estado: Métricas ──────────────────────────────────────────────────────────
 const metricas = ref(null)
@@ -132,11 +150,22 @@ async function carregarStats() {
 async function carregarChamados() {
   carregandoChamados.value = true
   try {
-    chamados.value = await api.listarChamados(diasFiltro.value, limiteFiltro.value)
+    chamados.value = await api.listarChamados(diasFiltro.value, limiteFiltro.value, 'aberto')
   } catch (e) {
     mostrarToast('Erro ao carregar chamados: ' + e.message, 'error')
   } finally {
     carregandoChamados.value = false
+  }
+}
+
+async function carregarChamadosConcluidos() {
+  carregandoChamadosConcluidos.value = true
+  try {
+    chamadosConcluidos.value = await api.listarChamados(diasFiltro.value, limiteFiltro.value, 'concluido')
+  } catch (e) {
+    mostrarToast('Erro ao carregar chamados concluídos: ' + e.message, 'error')
+  } finally {
+    carregandoChamadosConcluidos.value = false
   }
 }
 
@@ -174,10 +203,24 @@ async function carregarOrganizacoes() {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
-function abrirModal(chamado) {
+async function abrirModal(chamado) {
   chamadoSelecionado.value = chamado
   sugestaoAtual.value = null
   erroSugestao.value = ''
+
+  // Reaproveita a análise salva anteriormente — evita reprocessar (e gastar
+  // cota da IA) toda vez que o técnico reabre o mesmo chamado
+  carregandoSugestao.value = true
+  try {
+    const salva = await api.buscarSugestaoSalva(chamado.chave)
+    if (salva && chamadoSelecionado.value?.chave === chamado.chave) {
+      sugestaoAtual.value = salva.sugestao
+    }
+  } catch {
+    // Sem análise salva — o técnico pode gerar uma nova pelo botão
+  } finally {
+    carregandoSugestao.value = false
+  }
 }
 
 function fecharModal() {
@@ -213,7 +256,20 @@ async function aplicarOrganizacao({ chave, organizacao }) {
 
 // ── Inicialização ─────────────────────────────────────────────────────────────
 
+// Carrega cada aba sob demanda, na primeira vez que ela é acessada
+const abasJaCarregadas = new Set()
+
+watch(abaAtiva, (aba) => {
+  if (abasJaCarregadas.has(aba)) return
+  abasJaCarregadas.add(aba)
+
+  if (aba === 'concluidos') carregarChamadosConcluidos()
+  else if (aba === 'metricas') carregarMetricas()
+  else if (aba === 'playbooks') carregarPlaybooks()
+})
+
 onMounted(() => {
+  abasJaCarregadas.add('dashboard')
   carregarStats()
   carregarChamados()
   carregarOrganizacoes()
@@ -242,14 +298,14 @@ section { animation: fadeIn 0.25s ease; }
 }
 
 .toast.success {
-  background: rgba(52, 199, 89, 0.15);
-  border: 1px solid rgba(52, 199, 89, 0.35);
+  background: rgba(0, 135, 90, 0.15);
+  border: 1px solid rgba(0, 135, 90, 0.35);
   color: var(--success);
 }
 
 .toast.error {
-  background: rgba(255, 55, 95, 0.15);
-  border: 1px solid rgba(255, 55, 95, 0.35);
+  background: rgba(222, 53, 11, 0.15);
+  border: 1px solid rgba(222, 53, 11, 0.35);
   color: var(--accent);
 }
 

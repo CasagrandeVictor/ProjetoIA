@@ -3,7 +3,7 @@
     <!-- Controles -->
     <div class="controls">
       <div class="section-header">
-        <span class="section-title">Chamados</span>
+        <span class="section-title">{{ titulo }}</span>
         <span v-if="!loading" class="count-badge">{{ chamados.length }}</span>
       </div>
 
@@ -76,6 +76,7 @@ defineProps({
   loading: Boolean,
   dias: { type: Number, default: 90 },
   limite: { type: Number, default: 50 },
+  titulo: { type: String, default: 'Chamados' },
 })
 
 defineEmits(['selecionar', 'reload'])
@@ -117,8 +118,8 @@ function statusClass(status) {
 }
 
 .count-badge {
-  background: rgba(10, 132, 255, 0.15);
-  border: 1px solid rgba(10, 132, 255, 0.2);
+  background: rgba(0, 82, 204, 0.15);
+  border: 1px solid rgba(0, 82, 204, 0.2);
   color: var(--primary);
   font-family: var(--mono);
   font-size: 11px;
@@ -150,7 +151,8 @@ function statusClass(status) {
 
 .btn-secondary:hover {
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--overlay);
+  border-color: var(--text-muted);
 }
 
 .empty-state {
@@ -195,8 +197,8 @@ function statusClass(status) {
 }
 
 .chamado-row:hover {
-  border-color: rgba(10, 132, 255, 0.3);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-color: rgba(0, 82, 204, 0.35);
+  box-shadow: 0 4px 16px rgba(9, 30, 66, 0.13);
   transform: translateX(3px);
 }
 
@@ -207,8 +209,8 @@ function statusClass(status) {
   font-size: 12px;
   font-weight: 600;
   color: var(--primary);
-  background: rgba(10, 132, 255, 0.1);
-  border: 1px solid rgba(10, 132, 255, 0.2);
+  background: rgba(0, 82, 204, 0.1);
+  border: 1px solid rgba(0, 82, 204, 0.2);
   padding: 3px 8px;
   border-radius: 6px;
 }
@@ -236,14 +238,14 @@ function statusClass(status) {
 }
 
 .org-ok {
-  background: rgba(52, 199, 89, 0.12);
-  border: 1px solid rgba(52, 199, 89, 0.25);
+  background: rgba(0, 135, 90, 0.12);
+  border: 1px solid rgba(0, 135, 90, 0.25);
   color: var(--success);
 }
 
 .org-vazia {
-  background: rgba(255, 55, 95, 0.12);
-  border: 1px solid rgba(255, 55, 95, 0.25);
+  background: rgba(222, 53, 11, 0.12);
+  border: 1px solid rgba(222, 53, 11, 0.25);
   color: var(--accent);
 }
 
@@ -258,13 +260,13 @@ function statusClass(status) {
   white-space: nowrap;
 }
 
-.status-open     { background: rgba(10, 132, 255, 0.15); color: var(--primary); }
-.status-progress { background: rgba(255, 159, 10, 0.15); color: var(--warning); }
-.status-done     { background: rgba(52, 199, 89, 0.15);  color: var(--success); }
-.status-default  { background: rgba(142, 142, 147, 0.15); color: var(--text-dim); }
+.status-open     { background: rgba(0, 82, 204, 0.15); color: var(--primary); }
+.status-progress { background: rgba(255, 139, 0, 0.15); color: var(--warning); }
+.status-done     { background: rgba(0, 135, 90, 0.15);  color: var(--success); }
+.status-default  { background: rgba(94, 108, 132, 0.15); color: var(--text-dim); }
 
 .btn-ia {
-  background: linear-gradient(135deg, var(--primary) 0%, #0066cc 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #0747A6 100%);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -276,5 +278,5 @@ function statusClass(status) {
   transition: all var(--transition);
 }
 
-.btn-ia:hover { box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4); transform: translateY(-1px); }
+.btn-ia:hover { box-shadow: 0 4px 16px rgba(0, 82, 204, 0.4); transform: translateY(-1px); }
 </style>

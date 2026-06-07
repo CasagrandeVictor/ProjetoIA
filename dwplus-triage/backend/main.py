@@ -44,6 +44,7 @@ JIRA_URL   = os.getenv("JIRA_URL", "https://dwplus.atlassian.net")
 
 TRAINING_DATA_PATH = Path(__file__).parent / "training_data.json"
 PLAYBOOKS_PATH     = Path(__file__).parent / "playbooks.json"
+ANALISES_PATH      = Path(__file__).parent / "analises_cache.json"
 
 app = FastAPI(
     title="DWPLUS Triage API",
@@ -78,7 +79,7 @@ class SugestaoIA(BaseModel):
     organizacao_sugerida: str
     confianca: float
     orientacoes: str
-    fonte: str  # "gemini" | "treinamento_email" | "treinamento_dominio" | "dominio" | "desconhecido"
+    fonte: str  # "gemini" | "treinamento_email" | "treinamento_dominio" | "dominio" | "desconhecido" | "historico_usuario"
     playbook_titulo: Optional[str] = None
     playbook_passos: Optional[List[str]] = None
     # Campos adicionados pelo Gemini (None quando usa IA de regras)
@@ -249,6 +250,34 @@ def _salvar_playbooks(playbooks: list):
         json.dump({"playbooks": playbooks}, f, ensure_ascii=False, indent=2)
 
 
+# ─── Cache de análises de IA ─────────────────────────────────────────────────
+# Evita reprocessar (e gastar cota do Gemini) sempre que o técnico reabre um
+# chamado já analisado — a sugestão fica salva e só é refeita sob pedido.
+
+def _carregar_analises() -> dict:
+    if ANALISES_PATH.exists():
+        try:
+            with open(ANALISES_PATH, "r", encoding="utf-8") as f:
+                return json.load(f).get("analises", {})
+        except Exception:
+            pass
+    return {}
+
+
+def _salvar_analise(chave: str, sugestao: "SugestaoIA"):
+    analises = _carregar_analises()
+    analises[chave] = {
+        "sugestao": sugestao.model_dump(),
+        "gerado_em": datetime.now().isoformat(),
+    }
+    with open(ANALISES_PATH, "w", encoding="utf-8") as f:
+        json.dump({"analises": analises}, f, ensure_ascii=False, indent=2)
+
+
+def _buscar_analise_salva(chave: str) -> Optional[dict]:
+    return _carregar_analises().get(chave)
+
+
 def _buscar_playbook(texto: str) -> Optional[dict]:
     """Retorna o primeiro playbook cujas palavras-chave são encontradas no texto."""
     texto_lower = texto.lower()
@@ -283,6 +312,45 @@ def _obter_orgs_jira(jira: JIRA) -> dict:
         print(f"⚠️  Erro ao buscar organizações do Jira: {e}")
 
     return _orgs_jira_cache
+
+
+def _buscar_organizacao_historica(jira: JIRA, email: str, campo_org: str) -> Optional[dict]:
+    """
+    Busca no Jira chamados FECHADOS do mesmo solicitante (mesmo e-mail) que já
+    têm a organização preenchida, e retorna a organização mais frequente entre
+    eles. Esse é um sinal muito mais forte e determinístico do que inferir a
+    organização pelo domínio do e-mail — garante que o mesmo usuário sempre
+    receba a mesma sugestão de organização, alinhada ao seu próprio histórico.
+    """
+    try:
+        email_escapado = email.replace('"', '\\"')
+        jql = f'reporter = "{email_escapado}" AND status in ("Resolvido", "cancelado") ORDER BY created DESC'
+        issues = jira.search_issues(jql, maxResults=20, fields=f"reporter,{campo_org},summary,status")
+    except Exception:
+        return None
+
+    organizacoes = []
+    for issue in issues:
+        org_bruta = getattr(issue.fields, campo_org, None)
+        nome_org = None
+        if org_bruta:
+            if isinstance(org_bruta, list) and org_bruta:
+                nome_org = getattr(org_bruta[0], "name", str(org_bruta[0]))
+            else:
+                nome_org = str(org_bruta)
+        if nome_org and nome_org != "Não preenchido":
+            organizacoes.append(nome_org)
+
+    if not organizacoes:
+        return None
+
+    contagem = Counter(organizacoes)
+    org_mais_comum, votos = contagem.most_common(1)[0]
+    return {
+        "organizacao": org_mais_comum,
+        "ocorrencias": votos,
+        "total_chamados": len(organizacoes),
+    }
 
 
 # ─── IA de Triagem ───────────────────────────────────────────────────────────
@@ -391,38 +459,89 @@ def gerar_sugestao_ia(chamado: ChamadoJira) -> SugestaoIA:
     )
 
 
+def _orientacoes_do_playbook(playbook: dict) -> str:
+    """
+    Texto curto de orientação quando há playbook — o passo a passo em si é
+    exibido no bloco dedicado de playbook da interface (sem repetir aqui).
+    """
+    return f"Playbook identificado: '{playbook['titulo']}'. Siga o passo a passo detalhado logo abaixo."
+
+
 def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
     """
-    Dispatches para Gemini quando GEMINI_API_KEY estiver configurada;
-    caso contrário usa a lógica de regras (gerar_sugestao_ia).
+    Sempre busca primeiro um playbook compatível por palavra-chave — se encontrado,
+    seu passo a passo vira a orientação principal (de forma determinística: o mesmo
+    conjunto de palavras-chave sempre resulta no mesmo playbook, garantindo que
+    chamados parecidos recebam exatamente o mesmo passo a passo ao longo do tempo).
+
+    Para os demais campos (organização, categoria, prioridade, justificativa),
+    despacha para Gemini quando GEMINI_API_KEY estiver configurada; caso contrário
+    usa a lógica de regras (gerar_sugestao_ia).
     """
+    texto = (chamado.titulo + " " + chamado.descricao).lower()
+    playbook = _buscar_playbook(texto)
+
+    # Busca no Jira chamados fechados anteriores do MESMO usuário — se ele já
+    # teve chamados resolvidos com organização preenchida, essa é a fonte mais
+    # confiável (e determinística) para sugerir a organização agora.
+    historico_org = None
+    jira_cliente = None
+    try:
+        jira_cliente = get_jira_client()
+        campo_org = detectar_campo_organizacao(jira_cliente)
+        historico_org = _buscar_organizacao_historica(jira_cliente, chamado.email, campo_org)
+    except Exception as e:
+        print(f"⚠️  Não foi possível consultar histórico do usuário no Jira: {e}")
+
     if not os.getenv("GEMINI_API_KEY"):
-        return gerar_sugestao_ia(chamado)
+        sugestao = gerar_sugestao_ia(chamado)
+        if playbook:
+            sugestao.orientacoes = _orientacoes_do_playbook(playbook)
+        if historico_org:
+            sugestao.organizacao_sugerida = historico_org["organizacao"]
+            sugestao.confianca = min(0.99, 0.90 + 0.02 * historico_org["ocorrencias"])
+            sugestao.fonte = "historico_usuario"
+        return sugestao
 
     from llm_gemini import analisar_chamado
 
     # Tenta carregar organizações válidas para guiar o Gemini (não bloqueante)
     orgs_validas: list = []
     try:
-        jira = get_jira_client()
-        orgs_validas = list(_obter_orgs_jira(jira).keys())
+        orgs_validas = list(_obter_orgs_jira(jira_cliente or get_jira_client()).keys())
     except Exception as e:
         print(f"⚠️  Não foi possível carregar organizações para o Gemini: {e}")
 
-    resultado = analisar_chamado(chamado.model_dump(), orgs_validas)
+    resultado = analisar_chamado(chamado.model_dump(), orgs_validas, playbook)
 
-    # Busca playbook por palavras-chave para enriquecer a sugestão do Gemini
-    texto = (chamado.titulo + " " + chamado.descricao).lower()
-    playbook = _buscar_playbook(texto)
+    orientacoes = _orientacoes_do_playbook(playbook) if playbook else resultado["orientacoes"]
+
+    organizacao_sugerida = resultado["organizacao_sugerida"]
+    confianca = resultado["confianca"]
+    justificativa = resultado.get("justificativa")
+    fonte = "gemini"
+
+    # Histórico do próprio usuário tem prioridade sobre a inferência da IA —
+    # garante consistência: o mesmo solicitante sempre cai na mesma organização.
+    if historico_org:
+        organizacao_sugerida = historico_org["organizacao"]
+        confianca = min(0.99, 0.90 + 0.02 * historico_org["ocorrencias"])
+        fonte = "historico_usuario"
+        justificativa = (
+            f"O usuário '{chamado.usuario_id}' já teve {historico_org['total_chamados']} "
+            f"chamado(s) fechado(s) anteriormente, sendo {historico_org['ocorrencias']} "
+            f"associado(s) à organização '{historico_org['organizacao']}'. "
+            "Mantendo a sugestão alinhada ao histórico do próprio usuário."
+        )
 
     return SugestaoIA(
-        organizacao_sugerida=resultado["organizacao_sugerida"],
-        confianca=resultado["confianca"],
-        orientacoes=resultado["orientacoes"],
-        fonte="gemini",
+        organizacao_sugerida=organizacao_sugerida,
+        confianca=confianca,
+        orientacoes=orientacoes,
+        fonte=fonte,
         categoria=resultado.get("categoria"),
         prioridade=resultado.get("prioridade"),
-        justificativa=resultado.get("justificativa"),
+        justificativa=justificativa,
         playbook_titulo=playbook["titulo"] if playbook else None,
         playbook_passos=playbook["passos"] if playbook else None,
     )
@@ -430,15 +549,26 @@ def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
+_STATUS_GRUPOS = {
+    "aberto": ["Aberto", "Aguardando pelo suporte"],
+    "concluido": ["Resolvido", "cancelado"],
+}
+
+
 @app.get("/chamados", response_model=List[ChamadoJira], summary="Lista chamados do Jira")
-def listar_chamados(dias: int = 90, limite: int = 50):
+def listar_chamados(dias: int = 90, limite: int = 50, status_grupo: Optional[str] = None):
     try:
         jira = get_jira_client()
         campo_org = detectar_campo_organizacao(jira)
-        issues = jira.search_issues(
-            f"created >= -{dias}d ORDER BY created DESC",
-            maxResults=limite,
-        )
+
+        jql = f"created >= -{dias}d"
+        status_nomes = _STATUS_GRUPOS.get(status_grupo)
+        if status_nomes:
+            lista = ", ".join(f'"{nome}"' for nome in status_nomes)
+            jql += f" AND status in ({lista})"
+        jql += " ORDER BY created DESC"
+
+        issues = jira.search_issues(jql, maxResults=limite)
         return [_extrair_chamado(i, campo_org) for i in issues]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar chamados: {exc}")
@@ -455,12 +585,31 @@ def buscar_chamado(chave: str):
         raise HTTPException(status_code=404, detail=f"Chamado {chave} não encontrado: {exc}")
 
 
-@app.post("/chamados/{chave}/sugestao", response_model=SugestaoIA, summary="Gera sugestão de IA")
+@app.get("/chamados/{chave}/sugestao", summary="Recupera análise de IA já salva (sem reprocessar)")
+def obter_sugestao_salva(chave: str):
+    """
+    Retorna a última análise salva para o chamado, se existir — não chama a IA
+    novamente. O frontend usa isso para evitar reanalisar toda vez que o
+    técnico reabre um chamado já analisado anteriormente.
+    """
+    salva = _buscar_analise_salva(chave)
+    if not salva:
+        raise HTTPException(status_code=404, detail="Nenhuma análise salva para este chamado.")
+    return salva
+
+
+@app.post("/chamados/{chave}/sugestao", response_model=SugestaoIA, summary="Gera (ou regenera) sugestão de IA")
 def gerar_sugestao(chave: str):
-    """Usa Gemini Flash quando GEMINI_API_KEY estiver configurada; fallback para regras."""
+    """
+    Usa Gemini Flash quando GEMINI_API_KEY estiver configurada; fallback para regras.
+    A sugestão gerada é salva e passa a ser reaproveitada nas próximas aberturas
+    do chamado — para reanalisar, o técnico aciona este endpoint explicitamente.
+    """
     chamado = buscar_chamado(chave)
     try:
-        return _gerar_sugestao_unificada(chamado)
+        sugestao = _gerar_sugestao_unificada(chamado)
+        _salvar_analise(chave, sugestao)
+        return sugestao
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar sugestão: {exc}")
 
@@ -473,30 +622,21 @@ def atualizar_chamado(chave: str, atualizacao: AtualizacaoChamado):
         issue = jira.issue(chave)
 
         # ── 1. Tenta atualizar o campo organização no Jira ────────────────────
+        # O campo "Organizations" (sd-customerorganization) espera uma matriz
+        # com os IDs das organizações como strings simples — ex: ["10"] — e não
+        # objetos {"id": ...} ou {"name": ...} (o Jira rejeita esses formatos
+        # com "Especifique o valor para Organizations na matriz").
         org_atualizada_no_campo = False
         orgs_disponiveis = _obter_orgs_jira(jira)
         org_id = orgs_disponiveis.get(atualizacao.organizacao)
 
         if org_id:
             try:
-                issue.update(fields={campo_org: [{"id": org_id}]})
+                issue.update(fields={campo_org: [org_id]})
                 org_atualizada_no_campo = True
                 print(f"✅ Campo organização atualizado: {atualizacao.organizacao} (id={org_id})")
             except Exception as e:
-                print(f"⚠️  Falha via issue.update: {e}")
-
-        if not org_atualizada_no_campo and org_id:
-            try:
-                resp = jira._session.post(
-                    f"{JIRA_URL}/rest/servicedeskapi/request/{chave}/organization",
-                    json={"organizationId": org_id},
-                    headers={"Content-Type": "application/json", "X-ExperimentalApi": "opt-in"},
-                )
-                if resp.status_code in (200, 201, 204):
-                    org_atualizada_no_campo = True
-                    print(f"✅ Organização atribuída via Service Desk API")
-            except Exception as e:
-                print(f"⚠️  Falha via Service Desk API: {e}")
+                print(f"⚠️  Falha ao atualizar campo organização: {e}")
 
         # ── 2. Adiciona comentário de triagem ─────────────────────────────────
         campo_status = "✅ Campo atualizado no Jira" if org_atualizada_no_campo else "⚠️ Apenas registrado em comentário"
@@ -591,6 +731,22 @@ def criar_playbook(playbook: Playbook):
     playbooks.append(playbook.dict())
     _salvar_playbooks(playbooks)
     print(f"✅ Playbook criado: {playbook.id} ({len(playbook.palavras_chave)} palavras-chave)")
+    return playbook
+
+
+@app.put("/playbooks/{playbook_id}", response_model=Playbook, summary="Atualiza um playbook existente")
+def atualizar_playbook(playbook_id: str, playbook: Playbook):
+    if playbook.id != playbook_id:
+        raise HTTPException(status_code=400, detail="O id do playbook não pode ser alterado.")
+
+    playbooks = _carregar_playbooks()
+    indice = next((i for i, p in enumerate(playbooks) if p["id"] == playbook_id), None)
+    if indice is None:
+        raise HTTPException(status_code=404, detail=f"Playbook '{playbook_id}' não encontrado.")
+
+    playbooks[indice] = playbook.dict()
+    _salvar_playbooks(playbooks)
+    print(f"✏️  Playbook atualizado: {playbook_id} ({len(playbook.palavras_chave)} palavras-chave)")
     return playbook
 
 

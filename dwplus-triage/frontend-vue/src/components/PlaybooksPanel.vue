@@ -2,17 +2,17 @@
   <div class="playbooks-section">
     <div class="section-header-row">
       <div class="section-title">Playbooks</div>
-      <button class="btn-primary btn-sm" @click="mostrarForm = !mostrarForm">
+      <button class="btn-primary btn-sm" @click="mostrarForm ? fecharForm() : abrirFormCriacao()">
         {{ mostrarForm ? '✕ Cancelar' : '+ Novo Playbook' }}
       </button>
     </div>
 
-    <!-- Formulário de criação -->
+    <!-- Formulário de criação/edição -->
     <div v-if="mostrarForm" class="form-card">
-      <div class="form-title">Novo Playbook</div>
+      <div class="form-title">{{ editandoId ? `Editando: ${editandoId}` : 'Novo Playbook' }}</div>
       <div class="form-group">
         <label class="form-label">ID (único)</label>
-        <input v-model="form.id" class="form-input" placeholder="ex: reset_senha" />
+        <input v-model="form.id" class="form-input" placeholder="ex: reset_senha" :disabled="!!editandoId" />
       </div>
       <div class="form-group">
         <label class="form-label">Título</label>
@@ -36,9 +36,9 @@
         ></textarea>
       </div>
       <div class="form-actions">
-        <button class="btn-primary" :disabled="criando || !formValido" @click="criarPlaybook">
-          <span v-if="criando" class="spinner-sm"></span>
-          {{ criando ? 'Salvando...' : '✓ Criar Playbook' }}
+        <button class="btn-primary" :disabled="salvando || !formValido" @click="salvarPlaybook">
+          <span v-if="salvando" class="spinner-sm"></span>
+          {{ salvando ? 'Salvando...' : (editandoId ? '✓ Salvar Alterações' : '✓ Criar Playbook') }}
         </button>
         <span v-if="erroForm" class="erro-inline">{{ erroForm }}</span>
       </div>
@@ -67,13 +67,16 @@
             <span class="pb-id">{{ pb.id }}</span>
             <div class="pb-titulo">{{ pb.titulo }}</div>
           </div>
-          <button
-            class="btn-danger-sm"
-            :disabled="deletando === pb.id"
-            @click="deletarPlaybook(pb.id)"
-          >
-            {{ deletando === pb.id ? '...' : '🗑' }}
-          </button>
+          <div class="pb-actions">
+            <button class="btn-secondary-sm" @click="abrirFormEdicao(pb)">✏️ Editar</button>
+            <button
+              class="btn-danger-sm"
+              :disabled="deletando === pb.id"
+              @click="deletarPlaybook(pb.id)"
+            >
+              {{ deletando === pb.id ? '...' : '🗑' }}
+            </button>
+          </div>
         </div>
 
         <div class="pb-keywords">
@@ -106,16 +109,13 @@ const props = defineProps({
 const emit = defineEmits(['reload'])
 
 const mostrarForm = ref(false)
-const criando = ref(false)
+const editandoId = ref(null)
+const salvando = ref(false)
 const deletando = ref(null)
 const erroForm = ref('')
 
-const form = ref({
-  id: '',
-  titulo: '',
-  palavrasChaveStr: '',
-  passosStr: '',
-})
+const formVazio = { id: '', titulo: '', palavrasChaveStr: '', passosStr: '' }
+const form = ref({ ...formVazio })
 
 const formValido = computed(() =>
   form.value.id.trim() &&
@@ -124,9 +124,35 @@ const formValido = computed(() =>
   form.value.passosStr.trim()
 )
 
-async function criarPlaybook() {
+function abrirFormCriacao() {
+  editandoId.value = null
   erroForm.value = ''
-  criando.value = true
+  form.value = { ...formVazio }
+  mostrarForm.value = true
+}
+
+function abrirFormEdicao(pb) {
+  editandoId.value = pb.id
+  erroForm.value = ''
+  form.value = {
+    id: pb.id,
+    titulo: pb.titulo,
+    palavrasChaveStr: pb.palavras_chave.join(', '),
+    passosStr: pb.passos.join('\n'),
+  }
+  mostrarForm.value = true
+}
+
+function fecharForm() {
+  mostrarForm.value = false
+  editandoId.value = null
+  form.value = { ...formVazio }
+  erroForm.value = ''
+}
+
+async function salvarPlaybook() {
+  erroForm.value = ''
+  salvando.value = true
   try {
     const palavras_chave = form.value.palavrasChaveStr
       .split(',')
@@ -138,21 +164,25 @@ async function criarPlaybook() {
       .map((s) => s.replace(/^\d+\.\s*/, '').trim())
       .filter(Boolean)
 
-    await api.criarPlaybook({
+    const payload = {
       id: form.value.id.trim(),
       titulo: form.value.titulo.trim(),
       palavras_chave,
       passos,
-    })
+    }
 
-    // Limpa o formulário e fecha
-    form.value = { id: '', titulo: '', palavrasChaveStr: '', passosStr: '' }
-    mostrarForm.value = false
+    if (editandoId.value) {
+      await api.atualizarPlaybook(editandoId.value, payload)
+    } else {
+      await api.criarPlaybook(payload)
+    }
+
+    fecharForm()
     emit('reload')
   } catch (e) {
     erroForm.value = e.message
   } finally {
-    criando.value = false
+    salvando.value = false
   }
 }
 
@@ -188,7 +218,7 @@ async function deletarPlaybook(id) {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, #0066cc 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #0747A6 100%);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -244,6 +274,8 @@ async function deletarPlaybook(id) {
 .form-input:focus,
 .form-textarea:focus { outline: none; border-color: var(--primary); }
 
+.form-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 
 .erro-inline { font-size: 12px; color: var(--accent); }
@@ -272,8 +304,8 @@ async function deletarPlaybook(id) {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .alert-error {
-  background: rgba(255, 55, 95, 0.1);
-  border: 1px solid rgba(255, 55, 95, 0.3);
+  background: rgba(222, 53, 11, 0.1);
+  border: 1px solid rgba(222, 53, 11, 0.3);
   border-radius: var(--radius-sm);
   padding: 14px 18px;
   color: var(--accent);
@@ -292,7 +324,7 @@ async function deletarPlaybook(id) {
   transition: all var(--transition);
 }
 
-.playbook-card:hover { border-color: rgba(94, 92, 230, 0.3); }
+.playbook-card:hover { border-color: rgba(101, 84, 192, 0.3); }
 
 .pb-header {
   display: flex;
@@ -307,8 +339,8 @@ async function deletarPlaybook(id) {
   font-size: 10px;
   font-weight: 700;
   color: var(--secondary);
-  background: rgba(94, 92, 230, 0.1);
-  border: 1px solid rgba(94, 92, 230, 0.2);
+  background: rgba(101, 84, 192, 0.1);
+  border: 1px solid rgba(101, 84, 192, 0.2);
   padding: 2px 7px;
   border-radius: 5px;
   display: inline-block;
@@ -330,13 +362,31 @@ async function deletarPlaybook(id) {
   transition: all var(--transition);
 }
 
-.btn-danger-sm:hover { background: rgba(255, 55, 95, 0.1); border-color: var(--accent); }
+.btn-danger-sm:hover { background: rgba(222, 53, 11, 0.1); border-color: var(--accent); }
+
+.pb-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.btn-secondary-sm {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 0 12px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.btn-secondary-sm:hover { color: var(--text); background: var(--overlay); border-color: var(--text-muted); }
 
 .pb-keywords { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
 
 .kw-badge {
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay);
   border: 1px solid var(--border);
   color: var(--text-dim);
   padding: 2px 8px;

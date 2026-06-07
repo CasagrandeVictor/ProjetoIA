@@ -5,6 +5,7 @@
 
 # ── Dados de runtime (não commitar dados reais do Jira) ──────────────────────
 backend/training_data.json
+backend/analises_cache.json
 
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

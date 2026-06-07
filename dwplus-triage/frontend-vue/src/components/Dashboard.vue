@@ -128,8 +128,8 @@ const percentualClass = computed(() => {
 }
 
 .alert-error {
-  background: rgba(255, 55, 95, 0.1);
-  border: 1px solid rgba(255, 55, 95, 0.3);
+  background: rgba(222, 53, 11, 0.1);
+  border: 1px solid rgba(222, 53, 11, 0.3);
   border-radius: var(--radius-sm);
   padding: 14px 18px;
   color: var(--accent);

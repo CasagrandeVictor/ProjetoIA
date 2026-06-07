@@ -59,6 +59,15 @@
                 <span v-if="carregandoSugestao" class="spinner-sm"></span>
                 {{ carregandoSugestao ? 'Analisando...' : '✨ Analisar com IA' }}
               </button>
+              <button
+                v-else
+                class="btn-secondary-sm"
+                :disabled="carregandoSugestao"
+                @click="$emit('gerar-sugestao')"
+              >
+                <span v-if="carregandoSugestao" class="spinner-sm"></span>
+                {{ carregandoSugestao ? 'Reanalisando...' : '🔄 Reanalisar' }}
+              </button>
             </div>
 
             <!-- Estado carregando -->
@@ -247,8 +256,8 @@ function prioridadeClass(p) {
   font-size: 11px;
   font-weight: 700;
   color: var(--primary);
-  background: rgba(10, 132, 255, 0.1);
-  border: 1px solid rgba(10, 132, 255, 0.2);
+  background: rgba(0, 82, 204, 0.1);
+  border: 1px solid rgba(0, 82, 204, 0.2);
   padding: 2px 8px;
   border-radius: 5px;
   display: inline-block;
@@ -278,7 +287,7 @@ function prioridadeClass(p) {
   justify-content: center;
 }
 
-.btn-close:hover { background: rgba(255, 55, 95, 0.1); color: var(--accent); border-color: var(--accent); }
+.btn-close:hover { background: rgba(222, 53, 11, 0.1); color: var(--accent); border-color: var(--accent); }
 
 .modal-body { padding: 20px 24px 24px; }
 
@@ -309,7 +318,7 @@ function prioridadeClass(p) {
 .text-warning { color: var(--warning) !important; }
 
 .descricao-block {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 14px;
@@ -337,7 +346,7 @@ function prioridadeClass(p) {
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  background: rgba(94, 92, 230, 0.06);
+  background: rgba(101, 84, 192, 0.06);
   border-bottom: 1px solid var(--border);
 }
 
@@ -356,8 +365,8 @@ function prioridadeClass(p) {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 20px;
-  background: rgba(94, 92, 230, 0.15);
-  border: 1px solid rgba(94, 92, 230, 0.3);
+  background: rgba(101, 84, 192, 0.15);
+  border: 1px solid rgba(101, 84, 192, 0.3);
   color: var(--secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -395,7 +404,7 @@ function prioridadeClass(p) {
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -427,8 +436,8 @@ function prioridadeClass(p) {
 .categoria-tag {
   font-family: var(--mono);
   font-size: 12px;
-  background: rgba(94, 92, 230, 0.1);
-  border: 1px solid rgba(94, 92, 230, 0.2);
+  background: rgba(101, 84, 192, 0.1);
+  border: 1px solid rgba(101, 84, 192, 0.2);
   color: var(--secondary);
   padding: 2px 8px;
   border-radius: 5px;
@@ -436,7 +445,7 @@ function prioridadeClass(p) {
 }
 
 .orientacoes-block {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay);
   border: 1px solid var(--border);
   border-left: 3px solid var(--primary);
   border-radius: var(--radius-sm);
@@ -459,8 +468,8 @@ function prioridadeClass(p) {
 }
 
 .playbook-block {
-  background: rgba(94, 92, 230, 0.06);
-  border: 1px solid rgba(94, 92, 230, 0.2);
+  background: rgba(101, 84, 192, 0.06);
+  border: 1px solid rgba(101, 84, 192, 0.2);
   border-radius: var(--radius-sm);
   padding: 14px;
   margin-bottom: 16px;
@@ -502,7 +511,7 @@ function prioridadeClass(p) {
 .org-select:focus { outline: none; border-color: var(--primary); }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, #0066cc 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #0747A6 100%);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -517,9 +526,28 @@ function prioridadeClass(p) {
 }
 
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:not(:disabled):hover { box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4); }
+.btn-primary:not(:disabled):hover { box-shadow: 0 4px 16px rgba(0, 82, 204, 0.4); }
 
 .btn-sm { padding: 7px 14px; font-size: 12px; margin-left: auto; }
+
+.btn-secondary-sm {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  transition: all var(--transition);
+}
+
+.btn-secondary-sm:hover { color: var(--text); background: var(--overlay); border-color: var(--text-muted); }
+.btn-secondary-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .hint-text { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
 
@@ -534,8 +562,8 @@ function prioridadeClass(p) {
 }
 
 .alert-error {
-  background: rgba(255, 55, 95, 0.1);
-  border: 1px solid rgba(255, 55, 95, 0.3);
+  background: rgba(222, 53, 11, 0.1);
+  border: 1px solid rgba(222, 53, 11, 0.3);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   color: var(--accent);

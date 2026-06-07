@@ -28,13 +28,17 @@ def _get_client():
     return _gemini_client
 
 
-def analisar_chamado(chamado: dict, organizacoes_validas: list) -> dict:
+def analisar_chamado(chamado: dict, organizacoes_validas: list, playbook: dict | None = None) -> dict:
     """
-    Analisa um chamado via Gemini 2.0 Flash e retorna triagem estruturada.
+    Analisa um chamado via Gemini 2.5 Flash e retorna triagem estruturada.
 
     Parâmetros:
         chamado: dicionário com os dados do chamado (ChamadoJira.dict()).
         organizacoes_validas: lista de nomes de organizações cadastradas no Jira.
+        playbook: playbook já identificado por palavra-chave para este chamado
+            (dict com 'titulo' e 'passos'), ou None se nenhum corresponder.
+            Quando presente, o passo a passo do playbook é o que será exibido ao
+            técnico — o Gemini só precisa alinhar a justificativa a ele.
 
     Retorno: dict com keys:
         organizacao_sugerida, confianca, categoria, prioridade,
@@ -58,6 +62,27 @@ def analisar_chamado(chamado: dict, organizacoes_validas: list) -> dict:
         else:
             orgs_linhas = "  (nenhuma organização cadastrada no sistema)"
 
+        # Se já existe um playbook identificado por palavra-chave, o passo a passo
+        # dele é o que será exibido ao técnico — o Gemini só precisa alinhar a
+        # justificativa a ele (garante que chamados parecidos recebam sempre o
+        # mesmo passo a passo, de forma consistente ao longo do tempo).
+        if playbook:
+            passos_fmt = "\n".join(f"  {i}. {p}" for i, p in enumerate(playbook["passos"], start=1))
+            playbook_bloco = f"""
+=== PLAYBOOK JÁ IDENTIFICADO PARA ESTE CHAMADO ===
+Título: {playbook['titulo']}
+Passo a passo (será exibido ao técnico tal como está):
+{passos_fmt}
+"""
+            orientacoes_instrucao = (
+                "Responda exatamente: \"Playbook identificado: '" + playbook['titulo'] + "'. "
+                "Siga o passo a passo detalhado logo abaixo.\" — não invente um passo a passo "
+                "novo nem repita os passos aqui, eles já serão exibidos ao técnico em destaque."
+            )
+        else:
+            playbook_bloco = ""
+            orientacoes_instrucao = "Forneça um passo a passo prático e detalhado para o técnico de N1/N2 resolver o chamado."
+
         prompt = f"""Você é um especialista em triagem de chamados de suporte técnico empresarial.
 
 Analise o chamado abaixo e produza uma triagem completa em JSON.
@@ -72,12 +97,12 @@ Organização já preenchida: {chamado.get('organizacao_atual', 'Não preenchido
 
 === ORGANIZAÇÕES DISPONÍVEIS NO SISTEMA ===
 {orgs_linhas}
-
+{playbook_bloco}
 === INSTRUÇÕES ===
 1. Escolha a organização que melhor representa o solicitante (prefira as da lista acima; infira pelo domínio se necessário).
 2. Classifique a categoria técnica do problema.
 3. Avalie a prioridade real com base no impacto descrito (pode diferir da registrada).
-4. Forneça orientações práticas e detalhadas para o técnico de N1/N2 resolver o chamado.
+4. Campo "orientacoes": {orientacoes_instrucao}
 5. Justifique brevemente a análise.
 
 Responda APENAS com o JSON abaixo, sem markdown, sem texto extra:
@@ -95,7 +120,7 @@ Valores válidos para prioridade: Baixa | Média | Alta | Crítica"""
 
         # ── Chama o Gemini Flash com saída JSON estruturada ───────────────────
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.2,

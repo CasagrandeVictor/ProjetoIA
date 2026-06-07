@@ -6,14 +6,16 @@ Sistema web de triagem automatizada de chamados do Jira com análise por IA (Gem
 
 ## Funcionalidades
 
-- Listagem de chamados do Jira em tempo real (últimos 90 dias)
+- Listagem de chamados do Jira em tempo real (abas "Em Aberto" e "Concluídos", últimos 90 dias)
 - Análise inteligente via **Gemini Flash** — sugestão de organização, categoria, prioridade e orientações técnicas detalhadas
+- Verificação de histórico do usuário: antes de sugerir, o sistema busca chamados fechados anteriores do mesmo solicitante no Jira para manter a organização consistente
 - Fallback automático para triagem por regras quando `GEMINI_API_KEY` não estiver configurada
-- Aplicação da sugestão com comentário automático no chamado via API
+- Cache de análises: a sugestão de IA é salva por chamado (`analises_cache.json`) e reaproveitada ao reabrir o chamado — botão "🔄 Reanalisar" força uma nova geração quando necessário
+- Aplicação da sugestão atualiza diretamente o campo Organização do chamado no Jira (com comentário de registro)
 - Base de playbooks: orientações passo a passo por tipo de problema (CRUD completo)
 - Feedback loop: cada triagem confirmada é registrada para melhoria contínua
 - Métricas de volume: média por dia/semana/mês, pico por hora e por dia da semana
-- Interface Vue 3 dark mode com gráficos interativos (Chart.js)
+- Interface Vue 3 com layout estilo Jira (tema claro, navegação lateral) e gráficos interativos (Chart.js)
 - Privacidade: apenas o domínio do e-mail é enviado ao LLM (nunca e-mail completo ou token)
 
 ---
@@ -107,13 +109,16 @@ dwplus-triage/
 │   ├── llm_gemini.py          # Integração Gemini Flash (google-genai SDK)
 │   ├── metricas_chamados.py   # Cálculo de métricas de volume + exportação CSV/PNG
 │   ├── playbooks.json         # Base de conhecimento (palavras-chave + passos)
+│   ├── analises_cache.json    # Cache de análises de IA por chamado (gerado em runtime)
+│   ├── training_data.json     # Histórico de feedback para treinamento (gerado em runtime)
 │   ├── requirements.txt       # Dependências Python
 │   └── venv/                  # Virtualenv (não commitado)
 ├── frontend-vue/              # Interface Vue 3 + Vite
 │   ├── src/
+│   │   ├── style.css          # Tokens de design (tema claro estilo Jira)
 │   │   ├── services/api.js    # Chamadas à API centralizadas (axios)
 │   │   └── components/
-│   │       ├── AppHeader.vue      # Navegação por abas
+│   │       ├── AppHeader.vue      # Navegação lateral por abas
 │   │       ├── Dashboard.vue      # Cards de estatísticas
 │   │       ├── ChamadosList.vue   # Tabela de chamados
 │   │       ├── ChamadoModal.vue   # Detalhe + análise IA + aplicar organização
@@ -156,8 +161,9 @@ Para o frontend Vue, crie `frontend-vue/.env`:
 |--------|------------------------------|---------------------------------------------------|
 | GET    | `/chamados`                  | Lista chamados (params: `dias`, `limite`)         |
 | GET    | `/chamados/{chave}`          | Busca chamado por chave                           |
-| POST   | `/chamados/{chave}/sugestao` | Gera análise de IA (Gemini ou regras)             |
-| PUT    | `/chamados/{chave}`          | Atualiza organização + registra feedback          |
+| GET    | `/chamados/{chave}/sugestao` | Recupera análise de IA já salva (sem reprocessar) — 404 se não houver |
+| POST   | `/chamados/{chave}/sugestao` | Gera (ou regenera) e salva a análise de IA (Gemini, regras ou histórico do usuário) |
+| PUT    | `/chamados/{chave}`          | Atualiza o campo Organização no Jira + registra feedback |
 | GET    | `/stats`                     | Estatísticas gerais (total, sem org, % pendente)  |
 | GET    | `/metricas`                  | Métricas de volume por hora, dia da semana e mês  |
 | GET    | `/organizacoes`              | Lista organizações do Jira Service Management     |
@@ -186,6 +192,10 @@ Para o frontend Vue, crie `frontend-vue/.env`:
   "playbook_passos": null
 }
 ```
+
+Valores possíveis para `fonte`: `gemini`, `historico_usuario` (o solicitante já teve chamados fechados — a sugestão é alinhada ao histórico dele), `treinamento_email`, `treinamento_dominio`, `dominio` ou `desconhecido` (fallback por regras).
+
+Cada análise gerada via `POST /chamados/{chave}/sugestao` é persistida em `backend/analises_cache.json` (chave → `{ "sugestao": ..., "gerado_em": "<timestamp ISO>" }`) e reaproveitada por `GET /chamados/{chave}/sugestao` até que o usuário clique em "🔄 Reanalisar" na interface.
 
 ### Métricas (`GET /metricas`)
 

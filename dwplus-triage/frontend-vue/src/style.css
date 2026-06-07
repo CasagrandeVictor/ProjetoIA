@@ -1,27 +1,29 @@
 /* @import deve vir primeiro, antes de qualquer regra CSS */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap');
 
-/* ── Reset & Design Tokens ────────────────────────────────────────────── */
+/* ── Reset & Design Tokens (estilo Jira / Atlassian, tema claro) ─────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary:    #0A84FF;
-  --secondary:  #5E5CE6;
-  --accent:     #FF375F;
-  --success:    #34C759;
-  --warning:    #FF9F0A;
-  --bg:         #0D0D0D;
-  --card:       #1A1A1A;
-  --card-hover: #222222;
-  --border:     #2C2C2C;
-  --text:       #F5F5F7;
-  --text-dim:   #8E8E93;
-  --text-muted: #48484A;
+  --primary:    #0052CC;
+  --secondary:  #6554C0;
+  --accent:     #DE350B;
+  --success:    #00875A;
+  --warning:    #FF8B00;
+  --bg:         #F4F5F7;
+  --card:       #FFFFFF;
+  --card-hover: #FAFBFC;
+  --border:     #DFE1E6;
+  --overlay:    rgba(9, 30, 66, 0.04);
+  --overlay-hover: rgba(9, 30, 66, 0.08);
+  --text:       #172B4D;
+  --text-dim:   #5E6C84;
+  --text-muted: #6B778C;
   --mono:       'JetBrains Mono', monospace;
   --sans:       'Work Sans', sans-serif;
-  --radius:     12px;
-  --radius-sm:  8px;
-  --transition: 200ms cubic-bezier(.4, 0, .2, 1);
+  --radius:     8px;
+  --radius-sm:  3px;
+  --transition: 150ms cubic-bezier(.4, 0, .2, 1);
 }
 
 html { scroll-behavior: smooth; }
@@ -35,40 +37,19 @@ body {
   position: relative;
 }
 
-/* Background animado */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(10,132,255,.08) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(94,92,230,.07) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,55,95,.04) 0%, transparent 70%);
-  animation: bgDrift 18s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: 0;
-}
-
-@keyframes bgDrift {
-  0%   { transform: scale(1)    translateY(0px); }
-  33%  { transform: scale(1.04) translateY(-12px); }
-  66%  { transform: scale(.97)  translateY(8px); }
-  100% { transform: scale(1.02) translateY(-6px); }
-}
-
 #app {
   position: relative;
   z-index: 1;
 }
 
 .app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 24px 64px;
+  max-width: none;
+  margin: 0 0 0 240px;
+  padding: 28px 40px 64px;
 }
 
 /* Scrollbar customizado */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }

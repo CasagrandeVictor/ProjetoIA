@@ -30,8 +30,10 @@ http.interceptors.response.use(
 export const api = {
   // ── Chamados ──────────────────────────────────────────────────────────────
 
-  listarChamados(dias = 90, limite = 50) {
-    return http.get('/chamados', { params: { dias, limite } }).then((r) => r.data)
+  listarChamados(dias = 90, limite = 50, statusGrupo = null) {
+    const params = { dias, limite }
+    if (statusGrupo) params.status_grupo = statusGrupo
+    return http.get('/chamados', { params }).then((r) => r.data)
   },
 
   buscarChamado(chave) {
@@ -40,6 +42,17 @@ export const api = {
 
   gerarSugestao(chave) {
     return http.post(`/chamados/${chave}/sugestao`).then((r) => r.data)
+  },
+
+  // Busca uma análise já salva, sem reprocessar — retorna null se não houver
+  buscarSugestaoSalva(chave) {
+    return http
+      .get(`/chamados/${chave}/sugestao`)
+      .then((r) => r.data)
+      .catch((e) => {
+        if (/nenhuma análise/i.test(e.message)) return null
+        throw e
+      })
   },
 
   atualizarChamado(chave, organizacao, comentario = null) {
@@ -72,6 +85,10 @@ export const api = {
 
   criarPlaybook(playbook) {
     return http.post('/playbooks', playbook).then((r) => r.data)
+  },
+
+  atualizarPlaybook(id, playbook) {
+    return http.put(`/playbooks/${id}`, playbook).then((r) => r.data)
   },
 
   deletarPlaybook(id) {

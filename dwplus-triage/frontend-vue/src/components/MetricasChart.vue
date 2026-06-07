@@ -123,11 +123,11 @@ const barOpts = {
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
-    tooltip: { backgroundColor: '#1A1A1A', borderColor: '#2C2C2C', borderWidth: 1, titleColor: '#F5F5F7', bodyColor: '#8E8E93' },
+    tooltip: { backgroundColor: '#172B4D', borderColor: '#DFE1E6', borderWidth: 1, titleColor: '#FFFFFF', bodyColor: '#DFE1E6' },
   },
   scales: {
-    x: { ticks: { color: '#8E8E93', font: { size: 11 } }, grid: { color: '#2C2C2C' } },
-    y: { ticks: { color: '#8E8E93', font: { size: 11 } }, grid: { color: '#2C2C2C' }, beginAtZero: true },
+    x: { ticks: { color: '#5E6C84', font: { size: 11 } }, grid: { color: '#DFE1E6' } },
+    y: { ticks: { color: '#5E6C84', font: { size: 11 } }, grid: { color: '#DFE1E6' }, beginAtZero: true },
   },
 }
 
@@ -154,10 +154,10 @@ const horaData = computed(() => {
     datasets: [{
       data: valores,
       backgroundColor: horas.map((_, i) =>
-        i === pico ? 'rgba(255, 159, 10, 0.8)' : 'rgba(10, 132, 255, 0.6)'
+        i === pico ? 'rgba(255, 139, 0, 0.8)' : 'rgba(0, 82, 204, 0.6)'
       ),
       borderColor: horas.map((_, i) =>
-        i === pico ? '#FF9F0A' : '#0A84FF'
+        i === pico ? '#FF8B00' : '#0052CC'
       ),
       borderWidth: 1,
       borderRadius: 4,
@@ -175,10 +175,10 @@ const diaData = computed(() => {
     datasets: [{
       data: dias.map((d) => props.metricas.por_dia_semana?.[d] || 0),
       backgroundColor: dias.map((d) =>
-        d === pico ? 'rgba(255, 159, 10, 0.8)' : 'rgba(94, 92, 230, 0.6)'
+        d === pico ? 'rgba(255, 139, 0, 0.8)' : 'rgba(101, 84, 192, 0.6)'
       ),
       borderColor: dias.map((d) =>
-        d === pico ? '#FF9F0A' : '#5E5CE6'
+        d === pico ? '#FF8B00' : '#6554C0'
       ),
       borderWidth: 1,
       borderRadius: 4,
@@ -195,9 +195,9 @@ const mesData = computed(() => {
     datasets: [{
       data: entries.map(([, v]) => v),
       fill: true,
-      backgroundColor: 'rgba(52, 199, 89, 0.1)',
-      borderColor: '#34C759',
-      pointBackgroundColor: '#34C759',
+      backgroundColor: 'rgba(0, 135, 90, 0.1)',
+      borderColor: '#00875A',
+      pointBackgroundColor: '#00875A',
       borderWidth: 2,
     }],
   }
@@ -238,7 +238,7 @@ const mesData = computed(() => {
   transition: all var(--transition);
 }
 
-.btn-secondary:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.2); }
+.btn-secondary:hover { color: var(--text); background: var(--overlay); border-color: var(--text-muted); }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
 
@@ -313,8 +313,8 @@ const mesData = computed(() => {
 .chart-canvas { height: 220px !important; }
 
 .alert-error {
-  background: rgba(255, 55, 95, 0.1);
-  border: 1px solid rgba(255, 55, 95, 0.3);
+  background: rgba(222, 53, 11, 0.1);
+  border: 1px solid rgba(222, 53, 11, 0.3);
   border-radius: var(--radius-sm);
   padding: 14px 18px;
   color: var(--accent);
@@ -322,7 +322,7 @@ const mesData = computed(() => {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, #0066cc 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #0747A6 100%);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);

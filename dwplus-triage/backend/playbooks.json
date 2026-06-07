@@ -84,6 +84,24 @@
         "Se for impressora de rede, verificar IP da impressora e reconfigurar a porta TCP/IP se necessário.",
         "Para solicitação de toner/cartucho: abrir chamado de compra com número de série e modelo da impressora."
       ]
+    },
+    {
+      "id": "Tablets",
+      "palavras_chave": [
+        "salesforce",
+        "tablet",
+        "intune",
+        "login",
+        "senha"
+      ],
+      "titulo": "Problema com o Salesforce no Tablet",
+      "passos": [
+        "No tablet, abra o aplicativo Intune.",
+        "Verificar o botão de senha (canto superior esquerdo). Se aparecer: peça ao colaborador titular do tablet que insira a senha dele. Se não aparecer: siga para o proximo passo",
+        "Verificar o status do tablet. Se houver ícone vermelho: vá às Configurações do tablet e atualize a senha do dispositivo.",
+        "Limpar armazenamento e cache. Limpe o armazenamento e o cache dos seguintes aplicativos: Salesforce e Chrome",
+        "Testar o login no Salesforce"
+      ]
     }
   ]
 }

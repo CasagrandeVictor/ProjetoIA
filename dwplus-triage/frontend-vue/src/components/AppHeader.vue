@@ -1,11 +1,14 @@
 <template>
-  <header class="app-header">
-    <div class="logo">DW+</div>
-    <div class="header-text">
-      <h1>DWPLUS Triage</h1>
-      <p>Sistema Inteligente de Triagem de Chamados</p>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">DW+</div>
+      <div class="brand-text">
+        <h1>DWPLUS Triage</h1>
+        <p>Triagem Inteligente de Chamados</p>
+      </div>
     </div>
-    <nav class="header-nav">
+
+    <nav class="sidebar-nav">
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -16,8 +19,11 @@
         {{ tab.label }}
       </button>
     </nav>
-    <span class="header-badge">v2.0 · Gemini Flash</span>
-  </header>
+
+    <div class="sidebar-footer">
+      <span class="header-badge">v2.0 · Gemini Flash</span>
+    </div>
+  </aside>
 </template>
 
 <script setup>
@@ -28,98 +34,113 @@ defineEmits(['update:modelValue'])
 
 const tabs = [
   { id: 'dashboard',  icon: '⚡', label: 'Dashboard' },
-  { id: 'chamados',   icon: '📋', label: 'Chamados' },
+  { id: 'chamados',   icon: '📋', label: 'Em Aberto' },
+  { id: 'concluidos', icon: '✅', label: 'Concluídos' },
   { id: 'metricas',   icon: '📊', label: 'Métricas' },
   { id: 'playbooks',  icon: '📖', label: 'Playbooks' },
 ]
 </script>
 
 <style scoped>
-.app-header {
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  z-index: 10;
+}
+
+.sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 28px 0 32px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 36px;
-  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 8px 24px;
 }
 
 .logo {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 13px;
   letter-spacing: -1px;
   color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 0 24px rgba(10, 132, 255, 0.35);
 }
 
-.header-text h1 {
-  font-family: var(--mono);
-  font-size: 20px;
+.brand-text h1 {
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(90deg, var(--primary), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  line-height: 1.2;
 }
 
-.header-text p {
-  font-size: 12px;
+.brand-text p {
+  font-size: 11px;
   color: var(--text-dim);
   margin-top: 2px;
+  line-height: 1.3;
 }
 
-.header-nav {
+.sidebar-nav {
   display: flex;
-  gap: 8px;
-  margin-left: auto;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .nav-btn {
   background: transparent;
   color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 16px;
-  font-size: 13px;
+  border: none;
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition);
-  display: inline-flex;
+  transition: background var(--transition), color var(--transition);
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
 }
 
 .nav-btn:hover {
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay);
 }
 
 .nav-btn.active {
-  background: rgba(10, 132, 255, 0.15);
-  border-color: rgba(10, 132, 255, 0.4);
+  background: rgba(0, 82, 204, 0.1);
   color: var(--primary);
+  font-weight: 600;
 }
 
-.nav-icon { font-size: 14px; }
+.nav-icon { font-size: 15px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 8px 4px;
+}
 
 .header-badge {
-  background: rgba(10, 132, 255, 0.12);
-  border: 1px solid rgba(10, 132, 255, 0.25);
-  color: var(--primary);
+  display: inline-block;
+  background: var(--overlay);
+  color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 20px;
