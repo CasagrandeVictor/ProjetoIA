@@ -100,6 +100,10 @@ class AtualizacaoChamado(BaseModel):
     comentario: Optional[str] = None
 
 
+class AtualizacaoAtendimento(BaseModel):
+    atendimento: str  # "Presencial" | "Remoto"
+
+
 class Playbook(BaseModel):
     id: str
     palavras_chave: List[str]
@@ -202,6 +206,11 @@ def _extrair_chamado(issue, campo_org: str) -> ChamadoJira:
 # Presencial/Remoto (mesmo critério usado em extrair_dataset.py para o treino)
 _VALORES_ATENDIMENTO = {"presencial", "remoto", "remota"}
 
+# Labels EXATAS usadas para SALVAR o atendimento no Jira — capitalização
+# confirmada a partir do dataset real extraído (extrair_dataset.py / TAREFA 1)
+LABEL_PRESENCIAL = "Presencial"
+LABEL_REMOTO = "Remoto"
+
 
 def _extrair_atendimento_real(issue) -> str:
     """Retorna 'Presencial'/'Remoto' a partir das labels do chamado, ou 'Não preenchido'."""
@@ -213,22 +222,66 @@ def _extrair_atendimento_real(issue) -> str:
 
 # ─── Base de Treinamento ─────────────────────────────────────────────────────
 
-def _carregar_treinamento() -> list:
+def _carregar_dados_treinamento() -> dict:
+    """Lê o JSON completo de training_data.json (todas as chaves, não só 'examples')."""
     if TRAINING_DATA_PATH.exists():
         try:
             with open(TRAINING_DATA_PATH, "r", encoding="utf-8") as f:
-                return json.load(f).get("examples", [])
+                return json.load(f)
         except Exception:
             pass
-    return []
+    return {}
+
+
+def _carregar_treinamento() -> list:
+    return _carregar_dados_treinamento().get("examples", [])
 
 
 def _salvar_treinamento(examples: list):
+    dados = _carregar_dados_treinamento()
+    dados["examples"] = examples
+    dados["total"] = len(examples)
+    dados["atualizado_em"] = datetime.now().isoformat()
     with open(TRAINING_DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(
-            {"examples": examples, "total": len(examples), "atualizado_em": datetime.now().isoformat()},
-            f, ensure_ascii=False, indent=2,
-        )
+        json.dump(dados, f, ensure_ascii=False, indent=2)
+
+
+# ─── Feedback do Modelo B (atendimento) ──────────────────────────────────────
+
+def _carregar_feedback_atendimento() -> list:
+    return _carregar_dados_treinamento().get("examples_atendimento", [])
+
+
+def _salvar_feedback_atendimento(examples: list):
+    dados = _carregar_dados_treinamento()
+    dados["examples_atendimento"] = examples
+    dados["total_atendimento"] = len(examples)
+    dados["atualizado_em"] = datetime.now().isoformat()
+    with open(TRAINING_DATA_PATH, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=2)
+
+
+def _registrar_feedback_atendimento(
+    chamado: ChamadoJira,
+    atendimento_sugerido: Optional[str],
+    confianca_sugerido: Optional[float],
+    atendimento_escolhido: str,
+):
+    """Registra o que o Modelo B sugeriu vs. o que o humano confirmou/corrigiu — dado para melhoria futura do modelo."""
+    examples = _carregar_feedback_atendimento()
+    examples.append({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().isoformat(),
+        "chave": chamado.chave,
+        "titulo": chamado.titulo,
+        "descricao": chamado.descricao[:500],
+        "atendimento_sugerido": atendimento_sugerido,
+        "confianca_sugerido": confianca_sugerido,
+        "atendimento_escolhido": atendimento_escolhido,
+        "sugestao_aplicada": atendimento_sugerido == atendimento_escolhido,
+    })
+    _salvar_feedback_atendimento(examples)
+    print(f"📝 Feedback de atendimento registrado: {chamado.chave} → {atendimento_escolhido} (sugerido: {atendimento_sugerido})")
 
 
 def _registrar_feedback(chamado: ChamadoJira, org_sugerida: str, org_escolhida: str, confianca: float, fonte: str):
@@ -757,6 +810,61 @@ def atualizar_chamado(chave: str, atualizacao: AtualizacaoChamado):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar chamado: {exc}")
+
+
+@app.put("/chamados/{chave}/atendimento", summary="Atualiza a label de atendimento (Presencial/Remoto) no Jira")
+def atualizar_atendimento(chave: str, atualizacao: AtualizacaoAtendimento):
+    """
+    Atualiza a label de atendimento (Presencial/Remoto) do chamado no Jira.
+
+    IMPORTANTE: o campo `labels` do Jira é uma LISTA — um chamado pode ter
+    outras labels além de Presencial/Remoto (ex: "Urgente", "TI"). Por isso,
+    em vez de sobrescrever a lista inteira, removemos apenas a label de
+    atendimento antiga (se existir) e adicionamos a nova, preservando todas
+    as demais labels do chamado.
+
+    Não afeta o campo Organização (PUT /chamados/{chave} continua igual).
+    """
+    valor = atualizacao.atendimento
+    if valor not in (LABEL_PRESENCIAL, LABEL_REMOTO):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Valor inválido para atendimento: '{valor}'. Use '{LABEL_PRESENCIAL}' ou '{LABEL_REMOTO}'.",
+        )
+
+    try:
+        jira = get_jira_client()
+        campo_org = detectar_campo_organizacao(jira)
+        issue = jira.issue(chave)
+
+        # Preserva todas as labels que não sejam de atendimento, e adiciona a nova
+        labels_atuais = list(getattr(issue.fields, "labels", None) or [])
+        labels_preservadas = [l for l in labels_atuais if l not in (LABEL_PRESENCIAL, LABEL_REMOTO)]
+        novas_labels = labels_preservadas + [valor]
+
+        issue.update(fields={"labels": novas_labels})
+        print(f"✅ Atendimento atualizado: {chave} → {valor} (labels: {novas_labels})")
+
+        # Registra feedback: o que o Modelo B sugeriu vs. o que o humano escolheu
+        chamado = _extrair_chamado(issue, campo_org)
+        sugestao_b = modelo_local.classificar(f"{chamado.titulo} {chamado.descricao}")
+        _registrar_feedback_atendimento(
+            chamado=chamado,
+            atendimento_sugerido=sugestao_b["atendimento"] if sugestao_b else None,
+            confianca_sugerido=sugestao_b["confianca_atend"] if sugestao_b else None,
+            atendimento_escolhido=valor,
+        )
+
+        return {
+            "mensagem": f"Atendimento do chamado {chave} atualizado para '{valor}'.",
+            "chave": chave,
+            "atendimento": valor,
+            "labels": novas_labels,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar atendimento: {exc}")
 
 
 @app.get("/stats", summary="Estatísticas gerais dos chamados")

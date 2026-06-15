@@ -172,6 +172,7 @@ Para o frontend Vue, crie `frontend-vue/.env`:
 | GET    | `/chamados/{chave}/sugestao` | Recupera análise de IA já salva (sem reprocessar) — 404 se não houver |
 | POST   | `/chamados/{chave}/sugestao` | Gera (ou regenera) e salva a análise de IA (Gemini, regras ou histórico do usuário) |
 | PUT    | `/chamados/{chave}`          | Atualiza o campo Organização no Jira + registra feedback |
+| PUT    | `/chamados/{chave}/atendimento` | Atualiza a label de atendimento (Presencial/Remoto) no Jira + registra feedback |
 | GET    | `/stats`                     | Estatísticas gerais (total, sem org, % pendente)  |
 | GET    | `/metricas`                  | Métricas de volume por hora, dia da semana e mês  |
 | GET    | `/organizacoes`              | Lista organizações do Jira Service Management     |
@@ -298,6 +299,28 @@ cai de volta no comportamento padrão (Gemini/regras).
   (organização e label Presencial/Remoto) — usado pela aba **🧪 Comparação
   (Modelo B)** no frontend (acesso discreto, ferramenta de avaliação/defesa
   acadêmica, não é uso diário)
+
+### 5. Editar e salvar o atendimento (Presencial/Remoto)
+
+No modal de detalhe do chamado (`ChamadoModal.vue`), a seção **Atendimento**
+mostra a sugestão do Modelo B (quando disponível) com o percentual de
+confiança e oferece um seletor Presencial/Remoto pré-preenchido com essa
+sugestão. O usuário pode confirmar ou trocar o valor e clicar em
+**"💾 Salvar atendimento no Jira"**, que chama `PUT /chamados/{chave}/atendimento`.
+
+Se o Modelo B não estiver disponível, o seletor continua funcional (sem
+pré-preenchimento) e o usuário escolhe manualmente.
+
+Como o campo `labels` do Jira é uma **lista** (um chamado pode ter outras
+labels além de Presencial/Remoto, ex.: "Urgente", "TI"), o endpoint faz
+leitura-modificação-escrita: remove apenas a label de atendimento antiga (se
+existir) e adiciona a nova, **preservando todas as demais labels** do
+chamado. O endpoint não altera o campo Organização (`PUT /chamados/{chave}`
+continua funcionando de forma independente).
+
+Cada salvamento também registra, em `training_data.json`
+(`examples_atendimento`), o que o Modelo B sugeriu vs. o que o usuário
+confirmou/corrigiu — dado para melhoria futura do modelo.
 
 ---
 

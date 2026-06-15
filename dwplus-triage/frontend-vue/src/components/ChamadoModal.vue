@@ -160,6 +160,48 @@
               </div>
             </div>
           </div>
+
+          <!-- Seção de atendimento (Presencial/Remoto) -->
+          <div class="atendimento-section">
+            <div class="ia-header">
+              <span class="ia-title">Atendimento</span>
+              <span v-if="sugestao?.atendimento" class="fonte-badge">Modelo B</span>
+            </div>
+            <div class="atendimento-content">
+              <p v-if="sugestao?.atendimento" class="hint-text" style="margin-top: 0">
+                Modelo B sugere: <strong>{{ sugestao.atendimento }}</strong>
+                <span v-if="sugestao.confianca_atendimento">
+                  ({{ Math.round(sugestao.confianca_atendimento * 100) }}% confiança)
+                </span>
+              </p>
+              <p v-else class="hint-text" style="margin-top: 0">
+                Modelo B não disponível — selecione manualmente.
+              </p>
+
+              <div class="atendimento-options">
+                <label class="radio-option" :class="{ active: atendimentoEscolhido === 'Presencial' }">
+                  <input type="radio" value="Presencial" v-model="atendimentoEscolhido" />
+                  Presencial
+                </label>
+                <label class="radio-option" :class="{ active: atendimentoEscolhido === 'Remoto' }">
+                  <input type="radio" value="Remoto" v-model="atendimentoEscolhido" />
+                  Remoto
+                </label>
+
+                <button
+                  class="btn-primary btn-sm-inline"
+                  :disabled="!atendimentoEscolhido || salvandoAtendimento"
+                  @click="salvarAtendimento"
+                >
+                  <span v-if="salvandoAtendimento" class="spinner-sm"></span>
+                  {{ salvandoAtendimento ? 'Salvando...' : '💾 Salvar atendimento no Jira' }}
+                </button>
+              </div>
+
+              <p v-if="sucessoAtendimento" class="alert-success">✅ {{ sucessoAtendimento }}</p>
+              <p v-if="erroAtendimento" class="alert-error inline">⚠️ {{ erroAtendimento }}</p>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -169,6 +211,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { api } from '../services/api.js'
 
 const props = defineProps({
   chamado: { type: Object, required: true },
@@ -197,6 +240,35 @@ async function aplicar() {
     await emit('aplicar', { chave: props.chamado.chave, organizacao: orgEscolhida.value })
   } finally {
     aplicando.value = false
+  }
+}
+
+// ── Atendimento (Presencial/Remoto) ─────────────────────────────────────────
+
+const atendimentoEscolhido = ref('')
+const salvandoAtendimento = ref(false)
+const sucessoAtendimento = ref('')
+const erroAtendimento = ref('')
+
+// Pré-preenche com a sugestão do Modelo B quando ela chega (se o usuário ainda não escolheu)
+watch(() => props.sugestao, (s) => {
+  if (s?.atendimento && !atendimentoEscolhido.value) {
+    atendimentoEscolhido.value = s.atendimento
+  }
+}, { immediate: true })
+
+async function salvarAtendimento() {
+  if (!atendimentoEscolhido.value) return
+  salvandoAtendimento.value = true
+  sucessoAtendimento.value = ''
+  erroAtendimento.value = ''
+  try {
+    await api.atualizarAtendimento(props.chamado.chave, atendimentoEscolhido.value)
+    sucessoAtendimento.value = `Atendimento salvo como "${atendimentoEscolhido.value}" no Jira.`
+  } catch (e) {
+    erroAtendimento.value = e.message
+  } finally {
+    salvandoAtendimento.value = false
   }
 }
 
@@ -570,4 +642,58 @@ function prioridadeClass(p) {
   font-size: 13px;
   margin: 12px 18px;
 }
+
+.alert-error.inline { margin: 12px 0 0; }
+
+.alert-success {
+  background: rgba(0, 135, 90, 0.1);
+  border: 1px solid rgba(0, 135, 90, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--success);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+/* ── Seção Atendimento ────────────────────────────────────────────────────── */
+.atendimento-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.atendimento-content { padding: 18px; }
+
+.atendimento-options {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  transition: all var(--transition);
+}
+
+.radio-option.active {
+  border-color: var(--primary);
+  color: var(--text);
+  background: rgba(0, 82, 204, 0.06);
+  font-weight: 600;
+}
+
+.radio-option input { accent-color: var(--primary); cursor: pointer; }
+
+.btn-sm-inline { padding: 9px 16px; font-size: 13px; margin-left: auto; }
 </style>

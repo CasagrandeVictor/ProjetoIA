@@ -61,6 +61,12 @@ export const api = {
       .then((r) => r.data)
   },
 
+  // Atualiza a label de atendimento (Presencial/Remoto) no Jira, preservando
+  // as demais labels do chamado
+  atualizarAtendimento(chave, atendimento) {
+    return http.put(`/chamados/${chave}/atendimento`, { atendimento }).then((r) => r.data)
+  },
+
   // ── Estatísticas & Métricas ───────────────────────────────────────────────
 
   stats(dias = 90, limite = 100) {
