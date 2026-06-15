@@ -22,6 +22,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from jira import JIRA
 
+import modelo_local  # Modelo B — classificador local treinado (atendimento)
+
 # Credenciais — lidas exclusivamente de variáveis de ambiente / arquivo .env
 # NUNCA insira tokens ou senhas diretamente no código-fonte
 
@@ -86,6 +88,10 @@ class SugestaoIA(BaseModel):
     categoria: Optional[str] = None
     prioridade: Optional[str] = None
     justificativa: Optional[str] = None
+    # Campos do Modelo B (classificador local treinado) — None se o modelo
+    # ainda não foi treinado/disponível (backend/modelo_atendimento.pkl ausente)
+    atendimento: Optional[str] = None  # "Presencial" | "Remoto"
+    confianca_atendimento: Optional[float] = None
 
 
 class AtualizacaoChamado(BaseModel):
@@ -190,6 +196,19 @@ def _extrair_chamado(issue, campo_org: str) -> ChamadoJira:
         status=status,
         prioridade=prioridade,
     )
+
+
+# Valores reconhecidos no campo padrão "labels" do Jira como atendimento
+# Presencial/Remoto (mesmo critério usado em extrair_dataset.py para o treino)
+_VALORES_ATENDIMENTO = {"presencial", "remoto", "remota"}
+
+
+def _extrair_atendimento_real(issue) -> str:
+    """Retorna 'Presencial'/'Remoto' a partir das labels do chamado, ou 'Não preenchido'."""
+    for label in getattr(issue.fields, "labels", None) or []:
+        if str(label).lower() in _VALORES_ATENDIMENTO:
+            return str(label)
+    return "Não preenchido"
 
 
 # ─── Base de Treinamento ─────────────────────────────────────────────────────
@@ -459,6 +478,21 @@ def gerar_sugestao_ia(chamado: ChamadoJira) -> SugestaoIA:
     )
 
 
+def _aplicar_modelo_b(sugestao: SugestaoIA, texto: str) -> SugestaoIA:
+    """
+    Preenche os campos `atendimento`/`confianca_atendimento` da sugestão usando
+    o Modelo B (classificador local treinado em treinar_modelo.py). Se o modelo
+    não estiver disponível (.pkl ausente) ou houver qualquer erro, os campos
+    permanecem None — não afeta organização, categoria, prioridade nem orientações.
+    """
+    if modelo_local.modelo_disponivel():
+        resultado = modelo_local.classificar(texto)
+        if resultado:
+            sugestao.atendimento = resultado["atendimento"]
+            sugestao.confianca_atendimento = resultado["confianca_atend"]
+    return sugestao
+
+
 def _orientacoes_do_playbook(playbook: dict) -> str:
     """
     Texto curto de orientação quando há playbook — o passo a passo em si é
@@ -501,7 +535,7 @@ def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
             sugestao.organizacao_sugerida = historico_org["organizacao"]
             sugestao.confianca = min(0.99, 0.90 + 0.02 * historico_org["ocorrencias"])
             sugestao.fonte = "historico_usuario"
-        return sugestao
+        return _aplicar_modelo_b(sugestao, texto)
 
     from llm_gemini import analisar_chamado
 
@@ -534,7 +568,7 @@ def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
             "Mantendo a sugestão alinhada ao histórico do próprio usuário."
         )
 
-    return SugestaoIA(
+    sugestao = SugestaoIA(
         organizacao_sugerida=organizacao_sugerida,
         confianca=confianca,
         orientacoes=orientacoes,
@@ -545,6 +579,7 @@ def _gerar_sugestao_unificada(chamado: ChamadoJira) -> SugestaoIA:
         playbook_titulo=playbook["titulo"] if playbook else None,
         playbook_passos=playbook["passos"] if playbook else None,
     )
+    return _aplicar_modelo_b(sugestao, texto)
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -612,6 +647,64 @@ def gerar_sugestao(chave: str):
         return sugestao
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar sugestão: {exc}")
+
+
+@app.get("/modelo/status", summary="Status do Modelo B (classificador local treinado)")
+def status_modelo():
+    """Indica se o Modelo B (atendimento Presencial/Remoto) está treinado e disponível."""
+    return {
+        "modelo_b_disponivel": modelo_local.modelo_disponivel(),
+        "alvo": "atendimento (Presencial/Remoto)",
+        "arquivo": modelo_local.MODELO_ATENDIMENTO_PATH.name,
+    }
+
+
+@app.get("/chamados/{chave}/comparar", summary="Compara Modelo B vs Gemini/regras vs valor real (avaliação)")
+def comparar_modelos(chave: str):
+    """
+    Roda o fluxo normal de sugestão (Gemini/regras + histórico do usuário, aqui
+    chamado de "Modelo A") e o Modelo B (classificador local treinado) sobre o
+    mesmo chamado, e compara ambos com os valores reais já registrados no Jira
+    (organização do chamado e label Presencial/Remoto).
+
+    Ferramenta de avaliação para a defesa acadêmica — não faz parte do fluxo
+    diário de triagem.
+    """
+    try:
+        jira = get_jira_client()
+        campo_org = detectar_campo_organizacao(jira)
+        issue = jira.issue(chave)
+        chamado = _extrair_chamado(issue, campo_org)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Chamado {chave} não encontrado: {exc}")
+
+    sugestao = _gerar_sugestao_unificada(chamado)
+
+    real_organizacao = chamado.organizacao_atual
+    real_atendimento = _extrair_atendimento_real(issue)
+
+    return {
+        "chave": chave,
+        "modelo_b_disponivel": modelo_local.modelo_disponivel(),
+        "organizacao": {
+            "modelo_a": sugestao.organizacao_sugerida,
+            "fonte_modelo_a": sugestao.fonte,
+            "real": real_organizacao,
+            "correto": (
+                sugestao.organizacao_sugerida == real_organizacao
+                if real_organizacao != "Não preenchido" else None
+            ),
+        },
+        "atendimento": {
+            "modelo_b": sugestao.atendimento,
+            "confianca_modelo_b": sugestao.confianca_atendimento,
+            "real": real_atendimento,
+            "correto": (
+                sugestao.atendimento == real_atendimento
+                if sugestao.atendimento and real_atendimento != "Não preenchido" else None
+            ),
+        },
+    }
 
 
 @app.put("/chamados/{chave}", summary="Atualiza chamado no Jira")

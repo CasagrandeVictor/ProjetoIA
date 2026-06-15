@@ -100,4 +100,14 @@ export const api = {
   exportarTreinamento() {
     return http.get('/training-data').then((r) => r.data)
   },
+
+  // ── Modelo B / Comparação (ferramenta de avaliação acadêmica) ──────────────
+
+  statusModelo() {
+    return http.get('/modelo/status').then((r) => r.data)
+  },
+
+  compararModelos(chave) {
+    return http.get(`/chamados/${chave}/comparar`).then((r) => r.data)
+  },
 }

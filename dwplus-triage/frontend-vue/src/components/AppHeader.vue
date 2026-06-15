@@ -20,6 +20,18 @@
       </button>
     </nav>
 
+    <nav class="sidebar-nav sidebar-nav-secondary">
+      <button
+        v-for="tab in tabsAvaliacao"
+        :key="tab.id"
+        :class="['nav-btn', 'nav-btn-sm', { active: modelValue === tab.id }]"
+        @click="$emit('update:modelValue', tab.id)"
+      >
+        <span class="nav-icon">{{ tab.icon }}</span>
+        {{ tab.label }}
+      </button>
+    </nav>
+
     <div class="sidebar-footer">
       <span class="header-badge">v2.0 · Gemini Flash</span>
     </div>
@@ -38,6 +50,11 @@ const tabs = [
   { id: 'concluidos', icon: '✅', label: 'Concluídos' },
   { id: 'metricas',   icon: '📊', label: 'Métricas' },
   { id: 'playbooks',  icon: '📖', label: 'Playbooks' },
+]
+
+// Acesso discreto — ferramenta de avaliação acadêmica, não é uso diário
+const tabsAvaliacao = [
+  { id: 'comparacao', icon: '🧪', label: 'Comparação (Modelo B)' },
 ]
 </script>
 
@@ -130,8 +147,18 @@ const tabs = [
 
 .nav-icon { font-size: 15px; width: 20px; text-align: center; }
 
-.sidebar-footer {
+.sidebar-nav-secondary {
   margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-btn-sm {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sidebar-footer {
   padding: 12px 8px 4px;
 }
 

@@ -11,6 +11,8 @@ Sistema web de triagem automatizada de chamados do Jira com análise por IA (Gem
 - Verificação de histórico do usuário: antes de sugerir, o sistema busca chamados fechados anteriores do mesmo solicitante no Jira para manter a organização consistente
 - Fallback automático para triagem por regras quando `GEMINI_API_KEY` não estiver configurada
 - Cache de análises: a sugestão de IA é salva por chamado (`analises_cache.json`) e reaproveitada ao reabrir o chamado — botão "🔄 Reanalisar" força uma nova geração quando necessário
+- **Modelo B (classificador local treinado)**: além do Gemini, um modelo de Machine Learning (TF-IDF + LinearSVC/MultinomialNB, treinado com dados reais de chamados fechados) prevê se o atendimento será **Presencial ou Remoto** a partir do texto do chamado — totalmente offline e opcional (ver seção [Modelo B](#modelo-b--classificador-local-treinado))
+- Tela de **Comparação de Modelos** (acesso discreto, ferramenta de avaliação): compara a sugestão atual (Gemini/regras) e o Modelo B com os valores reais já registrados no Jira
 - Aplicação da sugestão atualiza diretamente o campo Organização do chamado no Jira (com comentário de registro)
 - Base de playbooks: orientações passo a passo por tipo de problema (CRUD completo)
 - Feedback loop: cada triagem confirmada é registrada para melhoria contínua
@@ -108,6 +110,11 @@ dwplus-triage/
 │   ├── main.py                # API FastAPI — todos os endpoints
 │   ├── llm_gemini.py          # Integração Gemini Flash (google-genai SDK)
 │   ├── metricas_chamados.py   # Cálculo de métricas de volume + exportação CSV/PNG
+│   ├── extrair_dataset.py     # [Modelo B] Script standalone — extrai dataset do Jira
+│   ├── treinar_modelo.py      # [Modelo B] Script standalone — treina e compara classificadores
+│   ├── modelo_local.py        # [Modelo B] Módulo de inferência (usado por main.py)
+│   ├── modelo_atendimento.pkl # [Modelo B] Modelo treinado (gerado, não commitado)
+│   ├── dataset_chamados.csv   # [Modelo B] Dataset extraído (gerado, não commitado)
 │   ├── playbooks.json         # Base de conhecimento (palavras-chave + passos)
 │   ├── analises_cache.json    # Cache de análises de IA por chamado (gerado em runtime)
 │   ├── training_data.json     # Histórico de feedback para treinamento (gerado em runtime)
@@ -118,12 +125,13 @@ dwplus-triage/
 │   │   ├── style.css          # Tokens de design (tema claro estilo Jira)
 │   │   ├── services/api.js    # Chamadas à API centralizadas (axios)
 │   │   └── components/
-│   │       ├── AppHeader.vue      # Navegação lateral por abas
-│   │       ├── Dashboard.vue      # Cards de estatísticas
-│   │       ├── ChamadosList.vue   # Tabela de chamados
-│   │       ├── ChamadoModal.vue   # Detalhe + análise IA + aplicar organização
-│   │       ├── MetricasChart.vue  # Gráficos por hora / dia / mês
-│   │       └── PlaybooksPanel.vue # CRUD de playbooks
+│   │       ├── AppHeader.vue          # Navegação lateral por abas
+│   │       ├── Dashboard.vue          # Cards de estatísticas
+│   │       ├── ChamadosList.vue       # Tabela de chamados
+│   │       ├── ChamadoModal.vue       # Detalhe + análise IA + aplicar organização
+│   │       ├── MetricasChart.vue      # Gráficos por hora / dia / mês
+│   │       ├── PlaybooksPanel.vue     # CRUD de playbooks
+│   │       └── ComparacaoModelos.vue  # [Modelo B] Tela de avaliação (Modelo A vs B vs real)
 │   └── .env.example
 ├── frontend/
 │   └── index.html             # Frontend legado (mantido como referência)
@@ -171,6 +179,8 @@ Para o frontend Vue, crie `frontend-vue/.env`:
 | POST   | `/playbooks`                 | Cria novo playbook                                |
 | DELETE | `/playbooks/{id}`            | Remove playbook                                   |
 | GET    | `/training-data`             | Exporta base de feedback de treinamento           |
+| GET    | `/modelo/status`              | Status do Modelo B (treinado/disponível ou não)  |
+| GET    | `/chamados/{chave}/comparar`  | [Avaliação] Compara Modelo A (Gemini/regras) e Modelo B com os valores reais do Jira |
 | GET    | `/docs`                      | Documentação interativa (Swagger UI)              |
 
 ---
@@ -189,11 +199,15 @@ Para o frontend Vue, crie `frontend-vue/.env`:
   "prioridade": "Alta",
   "justificativa": "Domínio sicredi.com.br e descrição indicam problema de login",
   "playbook_titulo": null,
-  "playbook_passos": null
+  "playbook_passos": null,
+  "atendimento": "Remoto",
+  "confianca_atendimento": 0.93
 }
 ```
 
 Valores possíveis para `fonte`: `gemini`, `historico_usuario` (o solicitante já teve chamados fechados — a sugestão é alinhada ao histórico dele), `treinamento_email`, `treinamento_dominio`, `dominio` ou `desconhecido` (fallback por regras).
+
+Os campos `atendimento` e `confianca_atendimento` vêm do **Modelo B** (classificador local treinado) e ficam `null` quando `backend/modelo_atendimento.pkl` não existe — veja a seção [Modelo B](#modelo-b--classificador-local-treinado).
 
 Cada análise gerada via `POST /chamados/{chave}/sugestao` é persistida em `backend/analises_cache.json` (chave → `{ "sugestao": ..., "gerado_em": "<timestamp ISO>" }`) e reaproveitada por `GET /chamados/{chave}/sugestao` até que o usuário clique em "🔄 Reanalisar" na interface.
 
@@ -212,6 +226,81 @@ Cada análise gerada via `POST /chamados/{chave}/sugestao` é persistida em `bac
 
 ---
 
+## Modelo B — Classificador Local Treinado
+
+Além do Gemini, o sistema conta com um segundo modelo de IA ("Modelo B"): um
+classificador de Machine Learning **treinado com dados reais** de chamados
+fechados do Jira, que prevê se o **atendimento será Presencial ou Remoto** a
+partir do texto (título + descrição) do chamado. Ele roda 100% local/offline
+(sem custo de API) e é totalmente **opcional** — se os arquivos `.pkl` não
+existirem, o sistema continua funcionando exatamente como antes (apenas
+Gemini/regras + histórico do usuário), sem nenhuma quebra.
+
+> A sugestão de **organização** continua vindo do Gemini + histórico do
+> usuário (já existente). Um classificador de organização também foi treinado
+> (`modelo_organizacao.pkl`) durante o desenvolvimento, mas seu desempenho
+> ficou abaixo do necessário para uso em produção (f1-macro ≈ 0.31 em 30
+> classes) — fica disponível apenas como material de comparação/discussão
+> acadêmica.
+
+### 1. Extrair o dataset (`extrair_dataset.py`)
+
+Script standalone — não altera nem depende do `main.py`. Usa as mesmas
+credenciais do `backend/.env`.
+
+```bash
+cd backend
+
+# 1) Descobrir os campos do Jira (opcional — usado para investigação)
+venv\Scripts\python extrair_dataset.py --listar-campos
+
+# 2) Extrair o dataset de chamados fechados, mantendo apenas agências Sicredi
+#    (padrão "NN-2604 <nome>"; o campo "Presencial/Remoto" vem das labels do Jira)
+venv\Scripts\python extrair_dataset.py --campo-atendimento labels --apenas-sicredi
+```
+
+Gera `backend/dataset_chamados.csv` (gitignored) com as colunas `chave`,
+`titulo`, `descricao`, `texto_limpo`, `dominio`, `organizacao`, `atendimento`,
+além de imprimir um relatório de qualidade (totais, % preenchido, distribuição
+de classes).
+
+### 2. Treinar o Modelo B (`treinar_modelo.py`)
+
+```bash
+cd backend
+venv\Scripts\python treinar_modelo.py
+```
+
+Para os alvos `organizacao` e `atendimento`, o script:
+
+- Faz `train_test_split` estratificado (80/20) e validação cruzada (5 folds, `f1_macro`)
+- Treina e compara 3 algoritmos: `MultinomialNB`, `LinearSVC` (calibrado) e `RandomForest`, todos sobre TF-IDF (uni+bigramas)
+- Imprime relatório de classificação, matriz de confusão e métricas de cada modelo
+- Salva o melhor modelo de cada alvo em `backend/modelo_atendimento.pkl` e `backend/modelo_organizacao.pkl` (gitignored)
+
+### 3. Inferência (`modelo_local.py`)
+
+Importado automaticamente por `main.py`. Expõe:
+
+- `modelo_disponivel()` → `True` se `modelo_atendimento.pkl` existe e carrega corretamente
+- `classificar(texto)` → `{"atendimento": "Presencial"|"Remoto", "confianca_atend": float}` ou `None`
+
+Nunca levanta exceção — qualquer falha resulta em `None`/`False`, e o sistema
+cai de volta no comportamento padrão (Gemini/regras).
+
+### 4. Usando o Modelo B
+
+- `POST /chamados/{chave}/sugestao` passa a incluir `atendimento` e
+  `confianca_atendimento` na resposta (campos `null` se o Modelo B não estiver disponível)
+- `GET /modelo/status` informa se o Modelo B está treinado/disponível
+- `GET /chamados/{chave}/comparar` roda o Modelo A (Gemini/regras + histórico)
+  e o Modelo B no mesmo chamado e compara ambos com os valores reais do Jira
+  (organização e label Presencial/Remoto) — usado pela aba **🧪 Comparação
+  (Modelo B)** no frontend (acesso discreto, ferramenta de avaliação/defesa
+  acadêmica, não é uso diário)
+
+---
+
 ## Troubleshooting
 
 | Problema | Causa provável | Solução |
@@ -222,6 +311,7 @@ Cada análise gerada via `POST /chamados/{chave}/sugestao` é persistida em `bac
 | Gemini retorna fallback | `GEMINI_API_KEY` inválida ou cota esgotada | Verifique a chave em `aistudio.google.com` |
 | CORS Error no frontend | Backend não iniciado | Confirme que `python main.py` está rodando na porta 8000 |
 | Gráfico PNG não gerado | `matplotlib` não instalado | `pip install matplotlib` no venv |
+| `atendimento`/`confianca_atendimento` sempre `null` | `backend/modelo_atendimento.pkl` não existe | Rode `extrair_dataset.py` e `treinar_modelo.py` (seção [Modelo B](#modelo-b--classificador-local-treinado)) |
 
 ---
 

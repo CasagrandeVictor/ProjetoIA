@@ -7,6 +7,10 @@
 backend/training_data.json
 backend/analises_cache.json
 
+# ── Dataset e modelos treinados (Modelo B — gerados localmente) ──────────────
+backend/dataset_chamados.csv
+backend/*.pkl
+
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
