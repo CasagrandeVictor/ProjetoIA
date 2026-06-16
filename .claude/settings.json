@@ -7,7 +7,17 @@
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Administrador\\\\Desktop\\\\ProjetoIA\" -Recurse -Depth 3 | Where-Object { !$_.PSIsContainer } | Select-Object FullName | Format-List)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/docs\" -UseBasicParsing -TimeoutSec 5)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 5)",
-      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 8)"
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 8)",
+      "PowerShell(Get-Process -Name python -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "PowerShell(Start-Sleep -Seconds 5; Invoke-WebRequest -Uri \"http://localhost:8000/chamados/atendimento-pendente\" -UseBasicParsing -TimeoutSec 60 | Select-Object StatusCode, @{N='Corpo';E={$_.Content | ConvertFrom-Json | ConvertTo-Json -Depth 1}})",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/chamados/atendimento-pendente\" -UseBasicParsing -TimeoutSec 60 | ForEach-Object { $data = $_.Content | ConvertFrom-Json; Write-Host \"disponivel:\" $data.disponivel; Write-Host \"total pendentes:\" $data.chamados.Count; $data.chamados | Select-Object -First 3 | ConvertTo-Json -Depth 2 })",
+      "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados/atendimento-pendente\" -UseBasicParsing -TimeoutSec 60 | ForEach-Object { $_.Content | ConvertFrom-Json }; Write-Host \"disponivel:\" $r.disponivel; Write-Host \"pendentes:\" $r.chamados.Count; $r.chamados | Select-Object -First 3 | ConvertTo-Json -Depth 2)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados/atendimento-pendente?dias=180&limite=300\" -UseBasicParsing -TimeoutSec 60 | ForEach-Object { $_.Content | ConvertFrom-Json }; Write-Host \"disponivel:\" $r.disponivel; Write-Host \"pendentes com 180d:\" $r.chamados.Count)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=5&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, status, organizacao_atual | ConvertTo-Json)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados/AT-5147/comparar\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | ConvertTo-Json -Depth 3)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 10)",
+      "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=3&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, atendimento | ConvertTo-Json)"
     ]
   }
 }

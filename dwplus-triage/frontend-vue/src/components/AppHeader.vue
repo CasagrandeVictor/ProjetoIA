@@ -45,11 +45,12 @@ defineProps({
 defineEmits(['update:modelValue'])
 
 const tabs = [
-  { id: 'dashboard',  icon: '⚡', label: 'Dashboard' },
-  { id: 'chamados',   icon: '📋', label: 'Em Aberto' },
-  { id: 'concluidos', icon: '✅', label: 'Concluídos' },
-  { id: 'metricas',   icon: '📊', label: 'Métricas' },
-  { id: 'playbooks',  icon: '📖', label: 'Playbooks' },
+  { id: 'dashboard',          icon: '⚡', label: 'Dashboard' },
+  { id: 'chamados',           icon: '📋', label: 'Em Aberto' },
+  { id: 'concluidos',         icon: '✅', label: 'Concluídos' },
+  { id: 'metricas',           icon: '📊', label: 'Métricas' },
+  { id: 'playbooks',          icon: '📖', label: 'Playbooks' },
+  { id: 'triagem-atendimento', icon: '🏷️', label: 'Triagem Atendimento' },
 ]
 
 // Acesso discreto — ferramenta de avaliação acadêmica, não é uso diário

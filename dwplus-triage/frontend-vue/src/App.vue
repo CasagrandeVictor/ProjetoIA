@@ -58,6 +58,11 @@
       />
     </section>
 
+    <!-- Tab: Triagem de Atendimento (Modelo B em lote) -->
+    <section v-if="abaAtiva === 'triagem-atendimento'">
+      <TriagemAtendimento />
+    </section>
+
     <!-- Tab: Comparação de Modelos (avaliação acadêmica) -->
     <section v-if="abaAtiva === 'comparacao'">
       <ComparacaoModelos />
@@ -95,6 +100,7 @@ import ChamadoModal from './components/ChamadoModal.vue'
 import MetricasChart from './components/MetricasChart.vue'
 import PlaybooksPanel from './components/PlaybooksPanel.vue'
 import ComparacaoModelos from './components/ComparacaoModelos.vue'
+import TriagemAtendimento from './components/TriagemAtendimento.vue'
 
 // ── Estado de navegação ───────────────────────────────────────────────────────
 const abaAtiva = ref('dashboard')

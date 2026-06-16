@@ -107,6 +107,13 @@ export const api = {
     return http.get('/training-data').then((r) => r.data)
   },
 
+  // ── Triagem de atendimento (Modelo B em lote) ────────────────────────────────
+
+  // Lista chamados em aberto sem label Presencial/Remoto + sugestão do Modelo B
+  atendimentoPendente(dias = 90, limite = 200) {
+    return http.get('/chamados/atendimento-pendente', { params: { dias, limite } }).then((r) => r.data)
+  },
+
   // ── Modelo B / Comparação (ferramenta de avaliação acadêmica) ──────────────
 
   statusModelo() {

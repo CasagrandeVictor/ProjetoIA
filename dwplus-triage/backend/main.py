@@ -75,6 +75,9 @@ class ChamadoJira(BaseModel):
     criado_em: str
     status: str
     prioridade: str
+    # Label de atendimento lida diretamente do Jira (campo labels)
+    # None quando o chamado ainda não tem a label definida
+    atendimento: Optional[str] = None  # "Presencial" | "Remoto" | None
 
 
 class SugestaoIA(BaseModel):
@@ -199,6 +202,7 @@ def _extrair_chamado(issue, campo_org: str) -> ChamadoJira:
         criado_em=criado_em,
         status=status,
         prioridade=prioridade,
+        atendimento=_extrair_atendimento_real(issue),
     )
 
 
@@ -212,12 +216,12 @@ LABEL_PRESENCIAL = "Presencial"
 LABEL_REMOTO = "Remoto"
 
 
-def _extrair_atendimento_real(issue) -> str:
-    """Retorna 'Presencial'/'Remoto' a partir das labels do chamado, ou 'Não preenchido'."""
+def _extrair_atendimento_real(issue) -> Optional[str]:
+    """Retorna 'Presencial'/'Remoto' a partir das labels do chamado, ou None se ausente."""
     for label in getattr(issue.fields, "labels", None) or []:
         if str(label).lower() in _VALORES_ATENDIMENTO:
             return str(label)
-    return "Não preenchido"
+    return None
 
 
 # ─── Base de Treinamento ─────────────────────────────────────────────────────
@@ -660,6 +664,59 @@ def listar_chamados(dias: int = 90, limite: int = 50, status_grupo: Optional[str
         return [_extrair_chamado(i, campo_org) for i in issues]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar chamados: {exc}")
+
+
+@app.get("/chamados/atendimento-pendente", summary="Lista chamados sem label de atendimento + sugestão do Modelo B")
+def chamados_atendimento_pendente(dias: int = 90, limite: int = 200):
+    """
+    Pega os chamados em aberto, filtra os que ainda NÃO têm label
+    Presencial/Remoto, roda APENAS o Modelo B local em cada um e devolve
+    a sugestão com confiança. NUNCA chama o Gemini — inferência local pura.
+
+    Precisa estar definido antes de /chamados/{chave} para o FastAPI não
+    capturar 'atendimento-pendente' como valor do parâmetro {chave}.
+    """
+    if not modelo_local.modelo_disponivel():
+        return {"disponivel": False, "chamados": []}
+
+    try:
+        jira = get_jira_client()
+        campo_org = detectar_campo_organizacao(jira)
+        # Reutiliza os mesmos status da aba "Em Aberto"
+        status_aberto = ", ".join(f'"{s}"' for s in _STATUS_GRUPOS["aberto"])
+        issues = jira.search_issues(
+            f"created >= -{dias}d AND status in ({status_aberto}) ORDER BY created DESC",
+            maxResults=limite,
+            fields=f"summary,description,reporter,labels,{campo_org},status",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar chamados: {exc}")
+
+    resultado = []
+    for issue in issues:
+        # Descarta chamados que já têm label de atendimento
+        labels = list(getattr(issue.fields, "labels", None) or [])
+        if any(lb in (LABEL_PRESENCIAL, LABEL_REMOTO) for lb in labels):
+            continue
+
+        titulo = issue.fields.summary or ""
+        descricao = issue.fields.description or ""
+        email = getattr(issue.fields.reporter, "emailAddress", "desconhecido@dwplus.com.br")
+
+        classificacao = modelo_local.classificar(f"{titulo} {descricao}")
+
+        resultado.append({
+            "chave": issue.key,
+            "titulo": titulo,
+            "descricao": descricao[:300],
+            "relator": email,
+            "atendimento_sugerido": classificacao["atendimento"] if classificacao else None,
+            "confianca": round(classificacao["confianca_atend"], 4) if classificacao else None,
+            # revisar=True quando confiança baixa (<70%) ou modelo não classificou
+            "revisar": (classificacao["confianca_atend"] < 0.70) if classificacao else True,
+        })
+
+    return {"disponivel": True, "chamados": resultado}
 
 
 @app.get("/chamados/{chave}", response_model=ChamadoJira, summary="Busca chamado por chave")

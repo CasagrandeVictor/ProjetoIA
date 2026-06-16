@@ -4,7 +4,7 @@
     <div class="controls">
       <div class="section-header">
         <span class="section-title">{{ titulo }}</span>
-        <span v-if="!loading" class="count-badge">{{ chamados.length }}</span>
+        <span v-if="!loading" class="count-badge">{{ chamadosFiltrados.length }}</span>
       </div>
       <div class="controls-right">
         <span class="filter-info">{{ dias }}d · {{ limite }} max</span>
@@ -14,6 +14,19 @@
           Atualizar
         </button>
       </div>
+    </div>
+
+    <!-- Filtros de atendimento -->
+    <div v-if="!loading && chamados.length" class="filtros">
+      <button
+        v-for="f in filtros"
+        :key="f.id"
+        :class="['btn-filtro', { active: filtroAtivo === f.id }]"
+        @click="filtroAtivo = f.id"
+      >
+        {{ f.label }}
+        <span class="filtro-badge">{{ contagemFiltro(f.id) }}</span>
+      </button>
     </div>
 
     <!-- Estado vazio / carregando -->
@@ -27,6 +40,11 @@
       <p>Nenhum chamado encontrado nos últimos {{ dias }} dias.</p>
     </div>
 
+    <div v-else-if="chamadosFiltrados.length === 0" class="empty-state">
+      <p style="font-size: 32px; margin-bottom: 8px">🔍</p>
+      <p>Nenhum chamado com o filtro selecionado.</p>
+    </div>
+
     <!-- Tabela estilo Jira -->
     <div v-else class="table-wrapper">
       <table class="jira-table">
@@ -36,6 +54,7 @@
             <th class="col-criado">Criado</th>
             <th class="col-relator">Relator</th>
             <th class="col-org">Organizations</th>
+            <th class="col-atend">Atendimento</th>
             <th class="col-resumo">Resumo</th>
             <th class="col-descricao">Descrição</th>
             <th class="col-action"></th>
@@ -43,7 +62,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="c in chamados"
+            v-for="c in chamadosFiltrados"
             :key="c.chave"
             class="jira-row"
             :class="{ 'sem-org': c.organizacao_atual === 'Não preenchido' }"
@@ -72,6 +91,18 @@
               </span>
             </td>
 
+            <!-- Atendimento -->
+            <td class="col-atend">
+              <span
+                v-if="c.atendimento"
+                class="atend-tag"
+                :class="c.atendimento === 'Presencial' ? 'tag-presencial' : 'tag-remoto'"
+              >
+                {{ c.atendimento }}
+              </span>
+              <span v-else class="atend-vazio">—</span>
+            </td>
+
             <!-- Resumo -->
             <td class="col-resumo">
               <span class="resumo-link">{{ c.titulo }}</span>
@@ -94,7 +125,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { ref, computed } from 'vue'
+
+const props = defineProps({
   chamados: { type: Array, default: () => [] },
   loading: Boolean,
   dias: { type: Number, default: 90 },
@@ -104,36 +137,37 @@ defineProps({
 
 defineEmits(['selecionar', 'reload'])
 
+// ── Filtros de atendimento ────────────────────────────────────────────────────
+const filtroAtivo = ref('todos')
+
+const filtros = [
+  { id: 'todos',      label: 'Todos' },
+  { id: 'presencial', label: 'Presencial' },
+  { id: 'remoto',     label: 'Remoto' },
+  { id: 'pendente',   label: 'Sem atendimento' },
+]
+
+const chamadosFiltrados = computed(() => {
+  if (filtroAtivo.value === 'presencial') return props.chamados.filter(c => c.atendimento === 'Presencial')
+  if (filtroAtivo.value === 'remoto')     return props.chamados.filter(c => c.atendimento === 'Remoto')
+  if (filtroAtivo.value === 'pendente')   return props.chamados.filter(c => !c.atendimento)
+  return props.chamados
+})
+
+function contagemFiltro(id) {
+  if (id === 'todos')      return props.chamados.length
+  if (id === 'presencial') return props.chamados.filter(c => c.atendimento === 'Presencial').length
+  if (id === 'remoto')     return props.chamados.filter(c => c.atendimento === 'Remoto').length
+  if (id === 'pendente')   return props.chamados.filter(c => !c.atendimento).length
+  return 0
+}
+
 function formatarData(data) {
   if (!data) return '—'
-  // "2026-06-16" → "16/jun/26"
   const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
   const [ano, mes, dia] = data.split('-')
   if (!ano || !mes || !dia) return data
   return `${dia}/${meses[parseInt(mes) - 1]}/${ano.slice(2)}`
-}
-
-function statusClass(status) {
-  const s = (status || '').toLowerCase()
-  if (s.includes('open') || s.includes('aberto')) return 'status-open'
-  if (s.includes('progress') || s.includes('andamento')) return 'status-progress'
-  if (s.includes('done') || s.includes('resolvido') || s.includes('fechado') || s.includes('cancelado')) return 'status-done'
-  if (s.includes('aguardando')) return 'status-waiting'
-  return 'status-default'
-}
-
-function prioClass(p) {
-  const v = (p || '').toLowerCase()
-  if (v.includes('alta') || v.includes('high') || v.includes('urgente')) return 'prio-high'
-  if (v.includes('baixa') || v.includes('low')) return 'prio-low'
-  return 'prio-medium'
-}
-
-function prioSimbolo(p) {
-  const v = (p || '').toLowerCase()
-  if (v.includes('alta') || v.includes('high') || v.includes('urgente')) return '↑'
-  if (v.includes('baixa') || v.includes('low')) return '↓'
-  return '='
 }
 </script>
 
@@ -143,7 +177,7 @@ function prioSimbolo(p) {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
@@ -203,6 +237,45 @@ function prioSimbolo(p) {
   border-color: var(--text-muted);
 }
 
+/* ── Filtros ──────────────────────────────────────────────────────────── */
+.filtros {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-filtro {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+}
+
+.btn-filtro:hover { color: var(--text); background: var(--overlay); }
+
+.btn-filtro.active {
+  background: rgba(0, 82, 204, 0.1);
+  border-color: rgba(0, 82, 204, 0.3);
+  color: var(--primary);
+}
+
+.filtro-badge {
+  background: var(--overlay);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+}
+
 /* ── Estados ──────────────────────────────────────────────────────────── */
 .empty-state {
   text-align: center;
@@ -247,7 +320,6 @@ function prioSimbolo(p) {
   table-layout: fixed;
 }
 
-/* Cabeçalho */
 .jira-table thead tr {
   background: #F4F5F7;
   border-bottom: 2px solid var(--border);
@@ -266,16 +338,14 @@ function prioSimbolo(p) {
 }
 
 /* Larguras das colunas */
-.col-t       { width: 32px;  text-align: center; }
-.col-chave   { width: 96px; }
-.col-criado  { width: 84px; }
-.col-relator { width: 180px; }
-.col-org     { width: 160px; }
-.col-p       { width: 32px;  text-align: center; }
-.col-resumo  { width: 200px; }
-.col-descricao { min-width: 160px; }
-.col-status  { width: 160px; }
-.col-action  { width: 110px; text-align: right; }
+.col-chave    { width: 90px; }
+.col-criado   { width: 80px; }
+.col-relator  { width: 170px; }
+.col-org      { width: 155px; }
+.col-atend    { width: 105px; }
+.col-resumo   { width: 190px; }
+.col-descricao { min-width: 150px; }
+.col-action   { width: 110px; text-align: right; }
 
 /* Linhas */
 .jira-row {
@@ -285,9 +355,7 @@ function prioSimbolo(p) {
 }
 
 .jira-row:last-child { border-bottom: none; }
-
 .jira-row:hover { background: #EAF2FF; }
-
 .jira-row.sem-org { border-left: 3px solid var(--accent); }
 
 .jira-table td {
@@ -299,37 +367,13 @@ function prioSimbolo(p) {
 }
 
 /* ── Células ──────────────────────────────────────────────────────────── */
-
-/* Ícone de tipo */
-.type-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.type-icon.prio-high    { color: #DE350B; }
-.type-icon.prio-medium  { color: #FF8B00; }
-.type-icon.prio-low     { color: #0052CC; }
-
-/* Chave */
 .chave-link {
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--primary);
-  cursor: pointer;
 }
 
-.chave-link:hover { text-decoration: underline; }
-
-/* Data */
-.col-criado td, .jira-table td.col-criado {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-family: var(--mono);
-}
-
-/* Relator */
 .relator-text {
   font-size: 12px;
   color: var(--text-dim);
@@ -339,7 +383,6 @@ function prioSimbolo(p) {
   white-space: nowrap;
 }
 
-/* Organização */
 .org-tag {
   display: inline-block;
   font-size: 11px;
@@ -364,18 +407,33 @@ function prioSimbolo(p) {
   border: 1px solid rgba(222, 53, 11, 0.2);
 }
 
-/* Prioridade */
-.prio-icon {
-  font-size: 14px;
+/* Tags de atendimento */
+.atend-tag {
+  display: inline-block;
+  font-size: 11px;
   font-weight: 700;
-  font-family: var(--mono);
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
-.prio-icon.prio-high   { color: #DE350B; }
-.prio-icon.prio-medium { color: #FF8B00; }
-.prio-icon.prio-low    { color: #0052CC; }
+.tag-presencial {
+  background: rgba(255, 139, 0, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(255, 139, 0, 0.25);
+}
 
-/* Resumo */
+.tag-remoto {
+  background: rgba(0, 82, 204, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(0, 82, 204, 0.2);
+}
+
+.atend-vazio {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .resumo-link {
   color: var(--primary);
   font-weight: 500;
@@ -385,9 +443,6 @@ function prioSimbolo(p) {
   white-space: nowrap;
 }
 
-.resumo-link:hover { text-decoration: underline; }
-
-/* Descrição */
 .descricao-text {
   color: var(--text-dim);
   font-size: 12px;
@@ -396,25 +451,6 @@ function prioSimbolo(p) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* Status */
-.status-pill {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: var(--mono);
-  padding: 3px 8px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-}
-
-.status-open    { background: rgba(0, 82, 204, 0.12);  color: var(--primary); }
-.status-progress { background: rgba(255, 139, 0, 0.12); color: var(--warning); }
-.status-done    { background: rgba(0, 135, 90, 0.12);  color: var(--success); }
-.status-waiting { background: rgba(94, 108, 132, 0.12); color: var(--text-dim); }
-.status-default { background: rgba(94, 108, 132, 0.12); color: var(--text-dim); }
 
 /* Botão IA */
 .btn-ia {
