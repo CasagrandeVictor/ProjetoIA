@@ -68,7 +68,7 @@
             <div class="pb-titulo">{{ pb.titulo }}</div>
           </div>
           <div class="pb-actions">
-            <button class="btn-secondary-sm" @click="abrirFormEdicao(pb)">✏️ Editar</button>
+            <button class="btn-secondary-sm" @click="abrirFormEdicao(pb)">Editar</button>
             <button
               class="btn-danger-sm"
               :disabled="deletando === pb.id"

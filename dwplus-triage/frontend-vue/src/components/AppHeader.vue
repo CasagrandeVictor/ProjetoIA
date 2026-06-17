@@ -1,7 +1,16 @@
 <template>
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="logo">DW+</div>
+      <!-- Coloque sua logo em frontend-vue/public/logo.png (ou .svg, .jpg) -->
+      <!-- Se o arquivo não existir, o quadrado azul "DW+" é exibido automaticamente -->
+      <img
+        v-if="!logoErro"
+        src="/logo.png"
+        alt="Logo"
+        class="logo-img"
+        @error="logoErro = true"
+      />
+      <div v-else class="logo">DW+</div>
       <div class="brand-text">
         <h1>DWPLUS Triage</h1>
         <p>Triagem Inteligente de Chamados</p>
@@ -15,7 +24,6 @@
         :class="['nav-btn', { active: modelValue === tab.id }]"
         @click="$emit('update:modelValue', tab.id)"
       >
-        <span class="nav-icon">{{ tab.icon }}</span>
         {{ tab.label }}
       </button>
     </nav>
@@ -27,7 +35,6 @@
         :class="['nav-btn', 'nav-btn-sm', { active: modelValue === tab.id }]"
         @click="$emit('update:modelValue', tab.id)"
       >
-        <span class="nav-icon">{{ tab.icon }}</span>
         {{ tab.label }}
       </button>
     </nav>
@@ -39,23 +46,28 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+
 defineProps({
   modelValue: { type: String, required: true },
 })
 defineEmits(['update:modelValue'])
 
+// Se /logo.png não existir na pasta public, o @error dispara e mostra o fallback "DW+"
+const logoErro = ref(false)
+
 const tabs = [
-  { id: 'dashboard',          icon: '⚡', label: 'Dashboard' },
-  { id: 'chamados',           icon: '📋', label: 'Em Aberto' },
-  { id: 'concluidos',         icon: '✅', label: 'Concluídos' },
-  { id: 'metricas',           icon: '📊', label: 'Métricas' },
-  { id: 'playbooks',          icon: '📖', label: 'Playbooks' },
-  { id: 'triagem-atendimento', icon: '🏷️', label: 'Triagem Atendimento' },
+  { id: 'dashboard',           label: 'Dashboard' },
+  { id: 'chamados',            label: 'Em Aberto' },
+  { id: 'concluidos',          label: 'Concluídos' },
+  { id: 'metricas',            label: 'Métricas' },
+  { id: 'playbooks',           label: 'Playbooks' },
+  { id: 'triagem-atendimento', label: 'Triagem Atendimento' },
 ]
 
 // Acesso discreto — ferramenta de avaliação acadêmica, não é uso diário
 const tabsAvaliacao = [
-  { id: 'comparacao', icon: '🧪', label: 'Comparação (Modelo B)' },
+  { id: 'comparacao', label: 'Comparação (Modelo B)' },
 ]
 </script>
 
@@ -94,6 +106,15 @@ const tabsAvaliacao = [
   font-size: 13px;
   letter-spacing: -1px;
   color: #fff;
+  flex-shrink: 0;
+}
+
+/* Logo customizada — coloque o arquivo em src/assets/logo.png */
+.logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 7px;
   flex-shrink: 0;
 }
 

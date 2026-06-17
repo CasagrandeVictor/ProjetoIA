@@ -17,7 +17,9 @@
       "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=5&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, status, organizacao_atual | ConvertTo-Json)",
       "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados/AT-5147/comparar\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | ConvertTo-Json -Depth 3)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 10)",
-      "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=3&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, atendimento | ConvertTo-Json)"
+      "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=3&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, atendimento | ConvertTo-Json)",
+      "PowerShell(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\Administrador\\\\Desktop\\\\ProjetoIA\\\\dwplus-triage\\\\frontend-vue\\\\src\\\\assets\" -Force)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/stats\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json | ConvertTo-Json })"
     ]
   }
 }
