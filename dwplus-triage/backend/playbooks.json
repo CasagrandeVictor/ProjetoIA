@@ -102,6 +102,18 @@
         "Limpar armazenamento e cache. Limpe o armazenamento e o cache dos seguintes aplicativos: Salesforce e Chrome",
         "Testar o login no Salesforce"
       ]
+    },
+    {
+      "id": "Modulo UA ( MUA )",
+      "palavras_chave": [
+        "MUA",
+        "Modulo UA"
+      ],
+      "titulo": "Problema com o MUA",
+      "passos": [
+        "Conferir na Central de Software se o programa está com a versão correta",
+        "Verificar se o usuario possui o acesso a esse sistema"
+      ]
     }
   ]
 }

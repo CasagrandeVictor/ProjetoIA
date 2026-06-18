@@ -19,7 +19,8 @@
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 10)",
       "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri \"http://localhost:8000/chamados?dias=90&limite=3&status_grupo=aberto\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json }; $r | Select-Object chave, atendimento | ConvertTo-Json)",
       "PowerShell(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\Administrador\\\\Desktop\\\\ProjetoIA\\\\dwplus-triage\\\\frontend-vue\\\\src\\\\assets\" -Force)",
-      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/stats\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json | ConvertTo-Json })"
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/stats\" -UseBasicParsing -TimeoutSec 30 | ForEach-Object { $_.Content | ConvertFrom-Json | ConvertTo-Json })",
+      "PowerShell($backend = try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/docs\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { \"offline\" }; $frontend = try { \\(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { \"offline\" }; Write-Host \"Backend: $backend | Frontend: $frontend\")"
     ]
   }
 }
