@@ -3,7 +3,7 @@
     <!-- Cards de estatísticas -->
     <div class="stats-grid">
       <div class="stat-card">
-        <span class="stat-label">Total de Chamados</span>
+        <span class="stat-label">Em Aberto</span>
         <div class="stat-value" :class="{ 'loading-val': loading }">
           {{ loading ? '—' : stats.total }}
         </div>
@@ -27,7 +27,7 @@
       </div>
 
       <div class="stat-card success">
-        <span class="stat-label">Chamados Triados</span>
+        <span class="stat-label">Com Organização</span>
         <div class="stat-value" :class="{ 'loading-val': loading }">
           {{ loading ? '—' : stats.total - stats.sem_organizacao }}
         </div>

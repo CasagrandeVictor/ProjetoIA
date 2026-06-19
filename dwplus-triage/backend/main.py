@@ -924,10 +924,11 @@ def atualizar_atendimento(chave: str, atualizacao: AtualizacaoAtendimento):
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar atendimento: {exc}")
 
 
-@app.get("/stats", summary="Estatísticas gerais dos chamados")
+@app.get("/stats", summary="Estatísticas gerais dos chamados em aberto")
 def estatisticas(dias: int = 90, limite: int = 100):
     try:
-        chamados = listar_chamados(dias=dias, limite=limite)
+        # Filtra somente chamados EM ABERTO para refletir o trabalho pendente atual
+        chamados = listar_chamados(dias=dias, limite=limite, status_grupo="aberto")
         total = len(chamados)
         sem_org = sum(1 for c in chamados if c.organizacao_atual == "Não preenchido")
         percentual = round(sem_org / total * 100, 1) if total > 0 else 0.0
