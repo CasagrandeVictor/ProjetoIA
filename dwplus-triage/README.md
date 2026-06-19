@@ -6,18 +6,21 @@ Sistema web de triagem automatizada de chamados do Jira com análise por IA (Gem
 
 ## Funcionalidades
 
-- Listagem de chamados do Jira em tempo real (abas "Em Aberto" e "Concluídos", últimos 90 dias)
+- Listagem de chamados do Jira em tempo real (abas "Em Aberto" e "Concluídos", últimos 90 dias) em tabela estilo Jira com colunas Chave, Criado, Relator, Organizations, Atendimento, Resumo e Descrição
+- **Filtro de atendimento** na aba "Em Aberto": filtra a tabela por Todos / Presencial / Remoto / Sem atendimento — a coluna Atendimento é lida diretamente das labels do Jira em tempo real
 - Análise inteligente via **Gemini Flash** — sugestão de organização, categoria, prioridade e orientações técnicas detalhadas
 - Verificação de histórico do usuário: antes de sugerir, o sistema busca chamados fechados anteriores do mesmo solicitante no Jira para manter a organização consistente
 - Fallback automático para triagem por regras quando `GEMINI_API_KEY` não estiver configurada
-- Cache de análises: a sugestão de IA é salva por chamado (`analises_cache.json`) e reaproveitada ao reabrir o chamado — botão "🔄 Reanalisar" força uma nova geração quando necessário
+- Cache de análises: a sugestão de IA é salva por chamado (`analises_cache.json`) e reaproveitada ao reabrir o chamado — botão "Reanalisar" força uma nova geração quando necessário
 - **Modelo B (classificador local treinado)**: além do Gemini, um modelo de Machine Learning (TF-IDF + LinearSVC/MultinomialNB, treinado com dados reais de chamados fechados) prevê se o atendimento será **Presencial ou Remoto** a partir do texto do chamado — totalmente offline e opcional (ver seção [Modelo B](#modelo-b--classificador-local-treinado))
+- **Tela "Triagem Atendimento"**: lista todos os chamados em aberto que ainda não têm a label Presencial/Remoto no Jira, exibe a sugestão do Modelo B (com confiança e destaque ⚠️ para baixa confiança), permite confirmar ou corrigir e salva a label diretamente no Jira — preservando as demais labels do chamado
 - Tela de **Comparação de Modelos** (acesso discreto, ferramenta de avaliação): compara a sugestão atual (Gemini/regras) e o Modelo B com os valores reais já registrados no Jira
 - Aplicação da sugestão atualiza diretamente o campo Organização do chamado no Jira (com comentário de registro)
 - Base de playbooks: orientações passo a passo por tipo de problema (CRUD completo)
 - Feedback loop: cada triagem confirmada é registrada para melhoria contínua
 - Métricas de volume: média por dia/semana/mês, pico por hora e por dia da semana
 - Interface Vue 3 com layout estilo Jira (tema claro, navegação lateral) e gráficos interativos (Chart.js)
+- Logo customizável: coloque `frontend-vue/public/logo.png` para substituir o ícone padrão "DW+"
 - Privacidade: apenas o domínio do e-mail é enviado ao LLM (nunca e-mail completo ou token)
 
 ---
@@ -121,16 +124,20 @@ dwplus-triage/
 │   ├── requirements.txt       # Dependências Python
 │   └── venv/                  # Virtualenv (não commitado)
 ├── frontend-vue/              # Interface Vue 3 + Vite
+│   ├── public/
+│   │   └── logo.png           # Logo customizada (opcional — substitui o ícone "DW+")
 │   ├── src/
+│   │   ├── assets/            # Assets locais (pasta criada, uso futuro)
 │   │   ├── style.css          # Tokens de design (tema claro estilo Jira)
 │   │   ├── services/api.js    # Chamadas à API centralizadas (axios)
 │   │   └── components/
-│   │       ├── AppHeader.vue          # Navegação lateral por abas
+│   │       ├── AppHeader.vue          # Navegação lateral (sem emojis)
 │   │       ├── Dashboard.vue          # Cards de estatísticas
-│   │       ├── ChamadosList.vue       # Tabela de chamados
+│   │       ├── ChamadosList.vue       # Tabela de chamados estilo Jira + filtros de atendimento
 │   │       ├── ChamadoModal.vue       # Detalhe + análise IA + aplicar organização
 │   │       ├── MetricasChart.vue      # Gráficos por hora / dia / mês
 │   │       ├── PlaybooksPanel.vue     # CRUD de playbooks
+│   │       ├── TriagemAtendimento.vue # Triagem em lote de atendimento (Modelo B)
 │   │       └── ComparacaoModelos.vue  # [Modelo B] Tela de avaliação (Modelo A vs B vs real)
 │   └── .env.example
 ├── frontend/
@@ -165,28 +172,51 @@ Para o frontend Vue, crie `frontend-vue/.env`:
 
 ## API — Endpoints
 
-| Método | Endpoint                     | Descrição                                         |
-|--------|------------------------------|---------------------------------------------------|
-| GET    | `/chamados`                  | Lista chamados (params: `dias`, `limite`)         |
-| GET    | `/chamados/{chave}`          | Busca chamado por chave                           |
-| GET    | `/chamados/{chave}/sugestao` | Recupera análise de IA já salva (sem reprocessar) — 404 se não houver |
-| POST   | `/chamados/{chave}/sugestao` | Gera (ou regenera) e salva a análise de IA (Gemini, regras ou histórico do usuário) |
-| PUT    | `/chamados/{chave}`          | Atualiza o campo Organização no Jira + registra feedback |
-| PUT    | `/chamados/{chave}/atendimento` | Atualiza a label de atendimento (Presencial/Remoto) no Jira + registra feedback |
-| GET    | `/stats`                     | Estatísticas gerais (total, sem org, % pendente)  |
-| GET    | `/metricas`                  | Métricas de volume por hora, dia da semana e mês  |
-| GET    | `/organizacoes`              | Lista organizações do Jira Service Management     |
-| GET    | `/playbooks`                 | Lista playbooks cadastrados                       |
-| POST   | `/playbooks`                 | Cria novo playbook                                |
-| DELETE | `/playbooks/{id}`            | Remove playbook                                   |
-| GET    | `/training-data`             | Exporta base de feedback de treinamento           |
-| GET    | `/modelo/status`              | Status do Modelo B (treinado/disponível ou não)  |
-| GET    | `/chamados/{chave}/comparar`  | [Avaliação] Compara Modelo A (Gemini/regras) e Modelo B com os valores reais do Jira |
-| GET    | `/docs`                      | Documentação interativa (Swagger UI)              |
+| Método | Endpoint                          | Descrição                                         |
+|--------|-----------------------------------|---------------------------------------------------|
+| GET    | `/chamados`                       | Lista chamados (params: `dias`, `limite`, `status_grupo`). Retorna `atendimento` (label do Jira) por chamado |
+| GET    | `/chamados/atendimento-pendente`  | Lista chamados em aberto sem label Presencial/Remoto + sugestão do Modelo B. Nunca chama o Gemini |
+| GET    | `/chamados/{chave}`               | Busca chamado por chave                           |
+| GET    | `/chamados/{chave}/sugestao`      | Recupera análise de IA já salva (sem reprocessar) — 404 se não houver |
+| POST   | `/chamados/{chave}/sugestao`      | Gera (ou regenera) e salva a análise de IA (Gemini, regras ou histórico do usuário) |
+| PUT    | `/chamados/{chave}`               | Atualiza o campo Organização no Jira + registra feedback |
+| PUT    | `/chamados/{chave}/atendimento`   | Atualiza a label de atendimento (Presencial/Remoto) no Jira preservando as demais labels + registra feedback |
+| GET    | `/chamados/{chave}/comparar`      | [Avaliação] Compara Modelo A (Gemini/regras) e Modelo B com os valores reais do Jira |
+| GET    | `/stats`                          | Estatísticas gerais (total, sem org, % pendente)  |
+| GET    | `/metricas`                       | Métricas de volume por hora, dia da semana e mês  |
+| GET    | `/organizacoes`                   | Lista organizações do Jira Service Management     |
+| GET    | `/playbooks`                      | Lista playbooks cadastrados                       |
+| POST   | `/playbooks`                      | Cria novo playbook                                |
+| PUT    | `/playbooks/{id}`                 | Atualiza um playbook existente                    |
+| DELETE | `/playbooks/{id}`                 | Remove playbook                                   |
+| GET    | `/training-data`                  | Exporta base de feedback de treinamento           |
+| GET    | `/modelo/status`                  | Status do Modelo B (treinado/disponível ou não)   |
+| GET    | `/docs`                           | Documentação interativa (Swagger UI)              |
 
 ---
 
 ## Modelos de Dados
+
+### Chamado (`ChamadoJira`)
+
+```json
+{
+  "chave": "AT-5147",
+  "usuario_id": "fernanda_alves",
+  "email": "fernanda_alves@sicredi.com.br",
+  "titulo": "Instalar camera de monitoria no atendimento dos ATMRs",
+  "descricao": "Instalar camera conforme fotos anexas...",
+  "organizacao_atual": "07-2604 Tubarão",
+  "criado_em": "2026-06-09",
+  "status": "Aguardando pelo suporte",
+  "prioridade": "Média",
+  "atendimento": "Presencial"
+}
+```
+
+O campo `atendimento` é lido diretamente das **labels do Jira** a cada chamada. Retorna `null` quando o chamado ainda não tem a label `Presencial` ou `Remoto` definida.
+
+---
 
 ### Sugestão de IA (`SugestaoIA`)
 
