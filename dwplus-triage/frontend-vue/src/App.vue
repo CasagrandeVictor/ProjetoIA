@@ -63,10 +63,6 @@
       <TriagemAtendimento />
     </section>
 
-    <!-- Tab: Comparação de Modelos (avaliação acadêmica) -->
-    <section v-if="abaAtiva === 'comparacao'">
-      <ComparacaoModelos />
-    </section>
 
     <!-- Modal de detalhe do chamado -->
     <ChamadoModal
@@ -99,7 +95,6 @@ import ChamadosList from './components/ChamadosList.vue'
 import ChamadoModal from './components/ChamadoModal.vue'
 import MetricasChart from './components/MetricasChart.vue'
 import PlaybooksPanel from './components/PlaybooksPanel.vue'
-import ComparacaoModelos from './components/ComparacaoModelos.vue'
 import TriagemAtendimento from './components/TriagemAtendimento.vue'
 
 // ── Estado de navegação ───────────────────────────────────────────────────────

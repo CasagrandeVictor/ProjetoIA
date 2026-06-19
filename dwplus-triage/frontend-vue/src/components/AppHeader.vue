@@ -28,20 +28,7 @@
       </button>
     </nav>
 
-    <nav class="sidebar-nav sidebar-nav-secondary">
-      <button
-        v-for="tab in tabsAvaliacao"
-        :key="tab.id"
-        :class="['nav-btn', 'nav-btn-sm', { active: modelValue === tab.id }]"
-        @click="$emit('update:modelValue', tab.id)"
-      >
-        {{ tab.label }}
-      </button>
-    </nav>
 
-    <div class="sidebar-footer">
-      <span class="header-badge">v2.0 · Gemini Flash</span>
-    </div>
   </aside>
 </template>
 
@@ -65,10 +52,6 @@ const tabs = [
   { id: 'triagem-atendimento', label: 'Triagem Atendimento' },
 ]
 
-// Acesso discreto — ferramenta de avaliação acadêmica, não é uso diário
-const tabsAvaliacao = [
-  { id: 'comparacao', label: 'Comparação (Modelo B)' },
-]
 </script>
 
 <style scoped>
